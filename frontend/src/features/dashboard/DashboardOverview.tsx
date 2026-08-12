@@ -223,14 +223,14 @@ export const DashboardOverview: React.FC = () => {
         <div className="win95-titlebar flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Terminal className="h-3.5 w-3.5 text-white" />
-            <span>Panel de Análisis en Vivo del Bot (Segundo a Segundo)</span>
+            <span>CONSOLA CRYPTO</span>
           </div>
           <span className="animate-pulse text-[#00ff00] font-bold">SCANNING LIVE</span>
         </div>
 
         <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-48 overflow-y-auto space-y-1">
           <div className="text-[#808080] text-[10px] border-b border-[#333] pb-1 mb-2">
-            === CONSOLA DE MONITOREO TÁCTICO SEGUNDO A SEGUNDO · SISTEMA TRADEMERC ===
+            === LOGS DE ANÁLISIS EN VIVO CRYPTO ===
           </div>
           {liveLogs.length > 0 ? (
             liveLogs.map((log, idx) => {

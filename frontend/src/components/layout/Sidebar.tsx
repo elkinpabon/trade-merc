@@ -35,14 +35,14 @@ export const Sidebar: React.FC = () => {
         <nav className="win95-window p-1 mb-3">
           <div className="flex items-center justify-between px-2 py-1">
             <div className="text-xs font-mono font-bold text-[#000080]">
-              ENTORNO TÁCTICO POLYMARKET (MERCADOS DE PREDICCIÓN)
+              POLYMARKET
             </div>
             <button
-              onClick={() => setSwitchingTo({ path: '/', name: 'TRADEMERC CRYPTO BOT', desc: 'Trading Algorítmico Binance · 10 Indicadores + ML' })}
+              onClick={() => setSwitchingTo({ path: '/', name: 'TRADEMERC CRYPTO', desc: 'Trading Algorítmico Binance' })}
               className="win95-button py-1.5 px-3 text-xs font-mono font-bold bg-[#000080] text-white flex items-center gap-1.5 hover:bg-[#0000a0]"
             >
               <RefreshCw className="h-3.5 w-3.5 text-yellow-300" />
-              <span>CAMBIAR A MÓDULO CRYPTO</span>
+              <span>CAMBIAR A CRYPTO</span>
             </button>
           </div>
         </nav>
@@ -78,11 +78,11 @@ export const Sidebar: React.FC = () => {
           })}
 
           <button
-            onClick={() => setSwitchingTo({ path: '/polymarket', name: 'TRADEMERC POLYMARKET BOT', desc: 'Mercados de Predicción · Ventaja +EV' })}
+            onClick={() => setSwitchingTo({ path: '/polymarket', name: 'POLYMARKET', desc: 'Mercados de Predicción' })}
             className="win95-button py-2 px-1 text-center text-xs font-mono font-bold flex flex-col items-center justify-center gap-1 bg-[#008080] text-white hover:bg-[#009090]"
           >
             <RefreshCw className="h-3.5 w-3.5 text-emerald-300" />
-            <span className="truncate max-w-full">CAMBIAR MÓDULO</span>
+            <span className="truncate max-w-full">CAMBIAR A POLYMARKET</span>
           </button>
         </div>
       </nav>

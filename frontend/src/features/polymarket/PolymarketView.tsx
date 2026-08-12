@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '@/lib/api';
-import { TrendingUp, Play, Square, Terminal, DollarSign, Activity, AlertCircle, Award } from 'lucide-react';
+import { TrendingUp, Play, Square, Terminal, Award } from 'lucide-react';
 
 export const PolymarketView: React.FC = () => {
   const [category, setCategory] = useState<string>('ALL');
@@ -58,13 +58,13 @@ export const PolymarketView: React.FC = () => {
     setLoading(true);
     try {
       if (isBotRunning) {
-        await api.stopPolymarketBot();
+        await api.stopBot();
         setIsBotRunning(false);
-        setActionMsg('Bot de Predicción Polymarket Pausado.');
+        setActionMsg('Bot de Polymarket Pausado.');
       } else {
-        await api.startPolymarketBot();
+        await api.startBot();
         setIsBotRunning(true);
-        setActionMsg('Bot de Predicción Polymarket Activado.');
+        setActionMsg('Bot de Polymarket Activado.');
       }
     } catch (err: any) {
       setActionMsg(`Error: ${err?.message}`);
@@ -79,7 +79,7 @@ export const PolymarketView: React.FC = () => {
     try {
       const res = await api.buyPolymarketContract(question, outcome, contractPrice, 50.0);
       if (res.success) {
-        setActionMsg(`¡Contrato Comprado! ${outcome} en "${question}" por $50.00 USD`);
+        setActionMsg(`Contrato Comprado: ${outcome} en "${question}" por $50.00 USD`);
         loadData();
       }
     } catch (err: any) {
@@ -105,7 +105,7 @@ export const PolymarketView: React.FC = () => {
         <div className="win95-titlebar flex items-center justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-300" />
-            <span className="font-bold text-xs">TRADEMERC - Módulo Autónomo Polymarket (+EV Prediction Engine)</span>
+            <span className="font-bold text-xs">POLYMARKET</span>
           </div>
           <span className="text-emerald-300 font-mono text-[11px] font-bold">
             RED: POLYGON CLOB & GAMMA API · ONLINE
@@ -122,11 +122,11 @@ export const PolymarketView: React.FC = () => {
               }`}
             >
               {isBotRunning ? <Square className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-              <span>{loading ? 'PROCESANDO...' : isBotRunning ? 'PAUSAR BOT POLYMARKET' : 'ACTIVAR BOT POLYMARKET (+EV)'}</span>
+              <span>{loading ? 'PROCESANDO...' : isBotRunning ? 'PAUSAR BOT POLYMARKET' : 'ACTIVAR BOT POLYMARKET'}</span>
             </button>
 
             <span className="text-xs font-mono text-black font-bold px-2 py-1 win95-inset bg-white">
-              MODO: PAPER PREDICTIONS (SIMULACIÓN +EV)
+              MODO: SIMULACIÓN (+EV)
             </span>
           </div>
 
@@ -135,7 +135,7 @@ export const PolymarketView: React.FC = () => {
               SALDO: ${analytics?.virtual_balance?.toFixed(2) || '1,000.00'} USD
             </span>
             <span className="win95-inset px-2 py-1 bg-white font-bold text-[#008000]">
-              WIN RATE: {analytics?.prediction_win_rate_pct || 78.5}%
+              ACIERTO: {analytics?.prediction_win_rate_pct || 78.5}%
             </span>
           </div>
         </div>
@@ -181,7 +181,7 @@ export const PolymarketView: React.FC = () => {
         <div className="lg:col-span-2 space-y-2">
           <div className="win95-window">
             <div className="win95-titlebar flex items-center justify-between">
-              <span>Mercados de Predicción de Alto Volumen & Oportunidades +EV</span>
+              <span>Mercados de Predicción de Alto Volumen</span>
               <span>{markets.length} Eventos Escaneados</span>
             </div>
 
@@ -261,14 +261,14 @@ export const PolymarketView: React.FC = () => {
             <div className="win95-titlebar flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Terminal className="h-3.5 w-3.5 text-white" />
-                <span>Consola Táctica Polymarket +EV</span>
+                <span>CONSOLA POLYMARKET</span>
               </div>
-              <span className="animate-pulse text-[#00ff00] font-bold text-[10px]">PREDICTING</span>
+              <span className="animate-pulse text-[#00ff00] font-bold text-[10px]">ESCANEANDO</span>
             </div>
 
             <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-[480px] overflow-y-auto space-y-1">
               <div className="text-[#808080] text-[10px] border-b border-[#333] pb-1 mb-2">
-                === ANÁLISIS DE MERCADOS DE PREDICCIÓN SEGUNDO A SEGUNDO ===
+                === LOGS DE PREDICCIÓN POLYMARKET ===
               </div>
               {liveLogs.length > 0 ? (
                 liveLogs.map((log, idx) => {
@@ -301,7 +301,7 @@ export const PolymarketView: React.FC = () => {
       {/* Active Positions Table Panel */}
       <div className="win95-panel p-3 space-y-3">
         <div className="win95-titlebar flex items-center justify-between">
-          <span>Contratos Comprados Actualmente por el Bot de Polymarket</span>
+          <span>Contratos Comprados Actualmente</span>
           <span>{positions.length} Posiciones Activas</span>
         </div>
 

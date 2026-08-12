@@ -19,11 +19,11 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
 
   useEffect(() => {
     const steps = [
-      { p: 20, text: 'Cargando protocolo de seguridad y autenticación...' },
-      { p: 45, text: 'Conectando a base de datos de mercado TiDB Cloud...' },
-      { p: 75, text: `Cargando entorno táctico: ${targetName}...` },
-      { p: 90, text: 'Verificando modelos predictivos y parámetros...' },
-      { p: 100, text: '¡Entorno listo! Redirigiendo...' }
+      { p: 20, text: 'Cargando protocolo de seguridad...' },
+      { p: 45, text: 'Conectando a base de datos de mercado...' },
+      { p: 75, text: `Cargando módulo: ${targetName}...` },
+      { p: 90, text: 'Verificando parámetros y datos...' },
+      { p: 100, text: 'Redirigiendo...' }
     ];
 
     let stepIndex = 0;
