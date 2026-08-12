@@ -121,12 +121,12 @@ export const DashboardOverview: React.FC = () => {
     <div className="space-y-4 font-sans text-black">
       {/* Top Inset Bar: PNL ALL OPEN, Margin, Today */}
       <div className="win95-panel p-3">
-        <div className="flex items-center justify-between border-b border-[#808080] pb-2 mb-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#808080] pb-2 mb-2 gap-2">
           <div>
-            <h1 className="text-xl font-bold font-sans text-[#000080]">Operaciones de Trading en Vivo</h1>
+            <h1 className="text-lg sm:text-xl font-bold font-sans text-[#000080]">Operaciones de Trading en Vivo</h1>
             <p className="text-xs text-[#404040] font-mono">{p?.open_positions_count || 0} posiciones abiertas</p>
           </div>
-          <div className="text-xs font-mono font-bold bg-[#000080] text-white px-3 py-1">
+          <div className="text-xs font-mono font-bold bg-[#000080] text-white px-3 py-1 self-stretch sm:self-auto text-center sm:text-left">
             CAPITAL DE TRADING: ${p?.total_equity?.toFixed(2) || '100.00'} USD
           </div>
         </div>

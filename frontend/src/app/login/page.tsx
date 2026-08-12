@@ -171,7 +171,7 @@ export default function LoginPage() {
           </div>
 
           <div className="win95-panel p-2 flex items-center justify-between text-[11px] font-mono text-black border-t border-[#808080]">
-            <div className="truncate text-[10px]">Derechos reservados, hecho por Elkin Pabon, se prohibe el uso no autorizado.</div>
+            <div>TRADEMERC v1.0</div>
             <div className="shrink-0 text-[10px] font-bold text-[#008000]">SECURE</div>
           </div>
         </div>
