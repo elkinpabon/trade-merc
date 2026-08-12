@@ -228,8 +228,8 @@ export const DashboardOverview: React.FC = () => {
           <span className="animate-pulse text-[#00ff00] font-bold">SCANNING LIVE</span>
         </div>
 
-        <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-48 overflow-y-auto space-y-1 log-text-outline">
-          <div className="text-[#808080] text-[10px] border-b border-[#333] pb-1 mb-2">
+        <div className="win95-inset bg-white p-3 font-mono text-xs text-black h-48 overflow-y-auto space-y-1">
+          <div className="text-[#808080] text-[10px] border-b border-[#e5e5e5] pb-1 mb-2">
             === LOGS DE ANÁLISIS EN VIVO CRYPTO ===
           </div>
           {liveLogs.length > 0 ? (
@@ -238,26 +238,26 @@ export const DashboardOverview: React.FC = () => {
               const isSignal = msg.includes('SEÑAL') || msg.includes('ENTRY') || msg.includes('Score=');
               const scoreMatch = msg.match(/Score=(\d+)/);
               const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
-              let msgColor = 'text-[#00ff00]';
-              if (score >= 65) msgColor = 'text-[#ffff00]';
-              if (msg.includes('BAJISTA') || msg.includes('SALIR')) msgColor = 'text-[#ff4444]';
-              if (msg.includes('SEÑAL DE ENTRADA') || msg.includes('ALTA CONV')) msgColor = 'text-[#00ffff]';
-              if (msg.includes('Orden ejecutada') || msg.includes('EXECUTED')) msgColor = 'text-[#ffff00] font-bold';
-              if (log.module === 'RiskEngine') msgColor = 'text-[#ff8800]';
-              if (log.module === 'StrategyEngine') msgColor = 'text-[#00ffff]';
+              let msgColor = 'text-[#007a3d]';
+              if (score >= 60) msgColor = 'text-[#b45309] font-bold';
+              if (msg.includes('BAJISTA') || msg.includes('SALIR')) msgColor = 'text-[#b91c1c] font-bold';
+              if (msg.includes('SEÑAL DE ENTRADA') || msg.includes('ALTA CONV')) msgColor = 'text-[#000080] font-bold';
+              if (msg.includes('Orden ejecutada') || msg.includes('EXECUTED')) msgColor = 'text-[#6b21a8] font-bold';
+              if (log.module === 'RiskEngine') msgColor = 'text-[#7c2d12] font-bold';
+              if (log.module === 'StrategyEngine') msgColor = 'text-[#000080] font-bold';
 
               return (
-                <div key={idx} className="leading-tight flex items-start gap-2 hover:bg-white/10 px-1">
-                  <span className="text-[#808080] shrink-0">
+                <div key={idx} className="leading-tight flex items-start gap-2 hover:bg-[#f0f0f0] px-1 border-b border-[#f5f5f5]">
+                  <span className="text-[#808080] shrink-0 text-[10px]">
                     [{new Date(log.timestamp || Date.now()).toLocaleTimeString()}]
                   </span>
-                  <span className="text-[#00ffff] shrink-0 font-bold">[{log.module || 'BOT'}]</span>
+                  <span className="text-[#000080] shrink-0 font-bold text-[10px]">[{log.module || 'BOT'}]</span>
                   <span className={msgColor}>{msg}</span>
                 </div>
               );
             })
           ) : (
-            <div className="text-[#00ff00] font-mono animate-pulse">
+            <div className="text-[#007a3d] font-mono animate-pulse">
               [TRADEMERC] Motor Multi-Factor analizando 10 indicadores en 50 pares de Binance en tiempo real...
             </div>
           )}

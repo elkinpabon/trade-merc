@@ -266,20 +266,20 @@ export const PolymarketView: React.FC = () => {
               <span className="animate-pulse text-[#00ff00] font-bold text-[10px]">ESCANEANDO</span>
             </div>
 
-            <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-[480px] overflow-y-auto space-y-1 log-text-outline">
-              <div className="text-[#808080] text-[10px] border-b border-[#333] pb-1 mb-2">
+            <div className="win95-inset bg-white p-3 font-mono text-xs text-black h-[480px] overflow-y-auto space-y-1">
+              <div className="text-[#808080] text-[10px] border-b border-[#e5e5e5] pb-1 mb-2">
                 === LOGS DE PREDICCIÓN POLYMARKET ===
               </div>
               {liveLogs.length > 0 ? (
                 liveLogs.map((log, idx) => {
                   const msg = log.message || '';
-                  let msgColor = 'text-[#00ff00]';
-                  if (msg.includes('+EV=')) msgColor = 'text-[#ffff00]';
-                  if (msg.includes('OPORTUNIDAD ALTA') || msg.includes('COMPRA SUGERIDA')) msgColor = 'text-[#00ffff] font-bold';
-                  if (msg.includes('Contrato Comprado')) msgColor = 'text-[#00ff00] font-bold bg-white/10';
+                  let msgColor = 'text-[#007a3d]';
+                  if (msg.includes('+EV=')) msgColor = 'text-[#b45309] font-bold';
+                  if (msg.includes('OPORTUNIDAD ALTA') || msg.includes('COMPRA SUGERIDA')) msgColor = 'text-[#000080] font-bold';
+                  if (msg.includes('Contrato Comprado')) msgColor = 'text-[#6b21a8] font-bold bg-[#f0fdf4]';
 
                   return (
-                    <div key={idx} className="leading-tight flex items-start gap-1 hover:bg-white/10 px-1">
+                    <div key={idx} className="leading-tight flex items-start gap-1 hover:bg-[#f0f0f0] px-1 border-b border-[#f5f5f5]">
                       <span className="text-[#808080] shrink-0 text-[10px]">
                         [{new Date(log.timestamp || Date.now()).toLocaleTimeString()}]
                       </span>
@@ -288,7 +288,7 @@ export const PolymarketView: React.FC = () => {
                   );
                 })
               ) : (
-                <div className="text-[#00ff00] font-mono animate-pulse">
+                <div className="text-[#007a3d] font-mono animate-pulse">
                   Calculando algoritmo de Valor Esperado (+EV) y Criterio de Kelly en Polymarket...
                 </div>
               )}
