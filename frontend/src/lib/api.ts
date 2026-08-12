@@ -145,10 +145,10 @@ export const api = {
     fetcher<{ total: number; markets: any[] }>(`/polymarket/markets?category=${encodeURIComponent(category)}`),
   getPolymarketSignals: () => fetcher<any[]>('/polymarket/signals'),
   getPolymarketPositions: () => fetcher<any[]>('/polymarket/positions'),
-  buyPolymarketContract: (question: string, outcome: string, contract_price: number, cost: number) =>
+  buyPolymarketContract: (question: string, outcome: string, contract_price: number, cost: number = 50.0, c_exec_weighted?: number, p_model?: number, taker_fee_pct?: number) =>
     fetcher<{ success: boolean; message: string }>('/polymarket/positions', {
       method: 'POST',
-      body: JSON.stringify({ question, outcome, contract_price, cost })
+      body: JSON.stringify({ question, outcome, contract_price, cost, c_exec_weighted, p_model, taker_fee_pct })
     }),
   getPolymarketLiveLogs: () => fetcher<{ logs: any[] }>('/polymarket/bot/logs'),
   getPolymarketBotStatus: () => fetcher<{ is_running: boolean; mode: string }>('/polymarket/bot/status'),

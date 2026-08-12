@@ -74,12 +74,12 @@ export const PolymarketView: React.FC = () => {
     }
   };
 
-  const buyContract = async (question: string, outcome: string, contractPrice: number) => {
+  const buyContract = async (question: string, outcome: string, contractPrice: number, cExecWeighted?: number, pModel?: number, takerFeePct?: number) => {
     setLoading(true);
     try {
-      const res = await api.buyPolymarketContract(question, outcome, contractPrice, 50.0);
+      const res = await api.buyPolymarketContract(question, outcome, contractPrice, 50.0, cExecWeighted, pModel, takerFeePct);
       if (res.success) {
-        setActionMsg(`Contrato Comprado: ${outcome} en "${question}" por $50.00 USD`);
+        setActionMsg(`Contrato L2 Llenado: ${outcome} en "${question}" (c_exec_w=$${(cExecWeighted || contractPrice).toFixed(3)})`);
         loadData();
       }
     } catch (err: any) {
