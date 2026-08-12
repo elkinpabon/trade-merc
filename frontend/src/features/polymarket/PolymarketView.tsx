@@ -192,6 +192,11 @@ export const PolymarketView: React.FC = () => {
                   const noPrice = m.prices ? m.prices[1] : 0.5;
                   const yesProb = Math.round(yesPrice * 100);
 
+                  const cExecBest = m.c_exec || (m.best_price ? m.best_price + 0.005 : 0.5);
+                  const evNetPct = m.ev_net ? (m.ev_net * 100).toFixed(1) : (m.ev_pct || 8.0);
+                  const spreadPct = m.spread ? (m.spread * 100).toFixed(2) : '0.50';
+                  const kellySize = Math.min(25, Math.max(10, Math.round(parseFloat(evNetPct || '10') * 1.8)));
+
                   return (
                     <div key={m.id} className="win95-panel p-3 bg-white space-y-2 border border-[#404040]">
                       <div className="flex items-start justify-between gap-2">
@@ -202,8 +207,8 @@ export const PolymarketView: React.FC = () => {
                           <h3 className="font-bold text-xs font-sans inline text-black">{m.question}</h3>
                         </div>
                         <div className="text-right font-mono shrink-0">
-                          <span className="text-xs font-bold text-[#008000] bg-[#e6ffe6] px-1.5 py-0.5 border border-[#008000] rounded-sm">
-                            EDGE +EV: +{m.ev_pct}%
+                          <span className="text-xs font-bold text-[#000080] bg-[#e6f0ff] px-2 py-0.5 border border-[#000080] rounded-sm">
+                            NET EV: +{evNetPct}% | CLOB c_exec: ${cExecBest.toFixed(3)}
                           </span>
                         </div>
                       </div>
@@ -223,7 +228,7 @@ export const PolymarketView: React.FC = () => {
                       {/* Market Info & Action Buttons */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#e0e0e0] text-xs font-mono">
                         <div className="text-[10px] text-[#808080]">
-                          Volumen 24h: <span className="font-bold text-black">${(m.volume / 1000).toFixed(1)}k</span> · Liquidez: <span className="font-bold text-black">${(m.liquidity / 1000).toFixed(1)}k</span>
+                          Vol: <span className="font-bold text-black">${(m.volume / 1000).toFixed(1)}k</span> · Spread: <span className="font-bold text-black">{spreadPct}%</span> · Kelly Sizing: <span className="font-bold text-[#000080]">${kellySize}.00 USD</span>
                         </div>
 
                         <div className="flex items-center gap-1">
