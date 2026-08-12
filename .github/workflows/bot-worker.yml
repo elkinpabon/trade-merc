@@ -1,0 +1,59 @@
+name: TRADEMERC ML Trading Bot Worker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
+  workflow_dispatch:        # Manual trigger button
+
+jobs:
+  run-bot-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run ML Multi-Factor Scan Step
+        env:
+          DB_USER: '3RWNAdLev5dv3er.root'
+          DB_PASSWORD: 'VSGF3kkVfo4CEIu9'
+          DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
+          DB_PORT: '4000'
+          DB_NAME: 'trademerc_db'
+        run: |
+          python -c "
+          import sys, os
+          sys.path.insert(0, os.path.abspath('backend'))
+          from app import create_app
+          from worker.bot_runner import run_bot_loop
+          app = create_app()
+          print('Executing automated ML trading scan step...')
+          with app.app_context():
+              from app.services import MarketDataService, StrategyService, PortfolioService, LogService
+              from app.models import BotConfig, BotRun
+              config = BotConfig.query.first()
+              active_run = BotRun.query.filter_by(status='running').first()
+              if config and active_run:
+                  market_svc = MarketDataService(config.exchange_id)
+                  strategy_svc = StrategyService(config)
+                  symbols = config.symbols.split(',')[:20] if config.symbols else ['BTC/USDT', 'ETH/USDT']
+                  all_tickers = market_svc.fetch_all_tickers(symbols)
+                  print(f'Ingested {len(all_tickers)} market tickers from Binance.')
+                  for sym in symbols[:10]:
+                      df = market_svc.get_ohlcv_dataframe(sym, timeframe=config.timeframe, limit=config.candle_limit)
+                      if not df.empty and len(df) >= 30:
+                          signal = strategy_svc.evaluate_market(df, sym, active_run.id)
+                          if signal:
+                              print(f'SIGNAL TRIGGERED: {signal.type} {sym} at ${signal.price}')
+                  print('ML scan cycle finished cleanly.')
+          "
