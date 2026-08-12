@@ -155,4 +155,5 @@ export const api = {
   startPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/start', { method: 'POST' }),
   stopPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/stop', { method: 'POST' }),
   getPolymarketAnalytics: () => fetcher<any>('/polymarket/analytics'),
+  getPolymarketL2Replay: () => fetcher<any>('/polymarket/replay'),
 };
