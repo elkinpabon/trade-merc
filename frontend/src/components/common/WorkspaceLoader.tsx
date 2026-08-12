@@ -79,7 +79,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
             <div>[SYS_BOOT] Verificando integridad de memoria... OK</div>
             <div>[NET_INIT] Conexión segura TiDB Cloud... OK</div>
             {progress >= 45 && <div>[API_SYNC] Sincronizando datos de mercado... OK</div>}
-            {progress >= 75 && <div>[WORKSP_LOAD] Entorno táctico configurado... OK</div>}
+            {progress >= 75 && <div>[WORKSP_LOAD] Entorno configurado... OK</div>}
             {progress >= 90 && <div>[READY] Redirigiendo a workspace seleccionado...</div>}
           </div>
         </div>

@@ -55,8 +55,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         {children}
       </main>
 
-      <footer className="win95-panel p-2 flex items-center justify-between text-xs font-mono text-black">
+      <footer className="win95-panel p-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-mono text-black text-center sm:text-left">
         <div>TRADEMERC v1.0</div>
+        <div className="font-bold text-[#000080]">Derechos reservados, hecho por Elkin Pabon, se prohibe el uso no autorizado.</div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -68,7 +69,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             CERRAR SESIÓN
           </button>
           <span className="win95-inset px-2 py-0.5 bg-white">OK</span>
-          <span>Memory: 64MB RAM</span>
         </div>
       </footer>
     </div>

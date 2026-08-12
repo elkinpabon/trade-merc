@@ -199,16 +199,16 @@ export const PolymarketView: React.FC = () => {
 
                   return (
                     <div key={m.id} className="win95-panel p-3 bg-white space-y-2 border border-[#404040]">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="win95-button text-[10px] font-mono px-1.5 py-0.5 bg-[#008080] text-white font-bold mr-2">
+                      <div className="flex flex-col sm:flex-row items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <span className="win95-button text-[10px] font-mono px-1.5 py-0.5 bg-[#008080] text-white font-bold inline-block mr-2">
                             {m.category}
                           </span>
-                          <h3 className="font-bold text-xs font-sans inline text-black">{m.question}</h3>
+                          <h3 className="font-bold text-xs font-sans inline text-black leading-snug">{m.question}</h3>
                         </div>
-                        <div className="text-right font-mono shrink-0">
-                          <span className="text-xs font-bold text-[#000080] bg-[#e6f0ff] px-2 py-0.5 border border-[#000080] rounded-sm">
-                            NET EV: +{evNetPct}% | CLOB c_exec: ${cExecBest.toFixed(3)}
+                        <div className="text-left sm:text-right font-mono shrink-0">
+                          <span className="text-xs font-bold text-[#000080] bg-[#e6f0ff] px-2 py-0.5 border border-[#000080] rounded-sm inline-block">
+                            NET EV: +{evNetPct}% | c_exec: ${cExecBest.toFixed(3)}
                           </span>
                         </div>
                       </div>
@@ -226,23 +226,27 @@ export const PolymarketView: React.FC = () => {
                       </div>
 
                       {/* Market Info & Action Buttons */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#e0e0e0] text-xs font-mono">
-                        <div className="text-[10px] text-[#808080]">
-                          Vol: <span className="font-bold text-black">${(m.volume / 1000).toFixed(1)}k</span> · Spread: <span className="font-bold text-black">{spreadPct}%</span> · Kelly Sizing: <span className="font-bold text-[#000080]">${kellySize}.00 USD</span>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-2 border-t border-[#e0e0e0] text-xs font-mono">
+                        <div className="text-[10px] text-[#808080] space-x-1">
+                          <span>Vol: <strong className="text-black">${(m.volume / 1000).toFixed(1)}k</strong></span>
+                          <span>·</span>
+                          <span>Spread: <strong className="text-black">{spreadPct}%</strong></span>
+                          <span>·</span>
+                          <span>Kelly: <strong className="text-[#000080]">${kellySize}.00 USD</strong></span>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                           <button
                             onClick={() => buyContract(m.question, 'YES', yesPrice)}
                             disabled={loading}
-                            className="win95-button px-3 py-1 text-xs font-bold bg-[#008000] text-white hover:bg-[#009900]"
+                            className="win95-button px-3 py-1 text-xs font-bold bg-[#008000] text-white hover:bg-[#009900] flex-1 sm:flex-initial"
                           >
                             COMPRAR YES (${yesPrice.toFixed(2)})
                           </button>
                           <button
                             onClick={() => buyContract(m.question, 'NO', noPrice)}
                             disabled={loading}
-                            className="win95-button px-3 py-1 text-xs font-bold bg-[#cc0000] text-white hover:bg-[#ee0000]"
+                            className="win95-button px-3 py-1 text-xs font-bold bg-[#cc0000] text-white hover:bg-[#ee0000] flex-1 sm:flex-initial"
                           >
                             COMPRAR NO (${noPrice.toFixed(2)})
                           </button>

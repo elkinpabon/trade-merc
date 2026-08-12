@@ -123,11 +123,11 @@ export default function LoginPage() {
               <div className="space-y-4">
                 <div className="win95-inset bg-white p-3 text-center space-y-1">
                   <div className="font-bold text-sm font-mono text-[#008000]">AUTENTICACIÓN EXITOSA</div>
-                  <div className="text-xs text-[#808080] font-mono">Selecciona el módulo táctico al que deseas ingresar:</div>
+                  <div className="text-xs text-[#808080] font-mono">Selecciona el módulo al que deseas ingresar:</div>
                 </div>
 
                 {/* Side-by-side Square Buttons Container */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Crypto Bot Square Button */}
                   <button
                     onClick={() => setLoadingWorkspace({ path: '/', name: 'TRADEMERC CRYPTO BOT', desc: 'Trading Algorítmico Binance · 10 Indicadores + ML' })}
@@ -138,50 +138,41 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <div className="font-bold text-xs leading-snug text-white group-hover:text-yellow-300">
-                        TRADEMERC CRYPTO BOT
-                      </div>
-                      <div className="text-[10px] text-slate-200 leading-tight">
-                        Trading Algorítmico Binance
-                        <br />
-                        10 Indicadores + ML
-                      </div>
+                      <div className="font-bold text-sm tracking-wide">TRADEMERC CRYPTO</div>
+                      <div className="text-[10px] text-blue-200">Trading Algorítmico Cripto Spot</div>
                     </div>
 
-                    <div className="w-full py-1.5 px-2 bg-yellow-400 text-black font-bold text-[11px] flex items-center justify-center gap-1 group-hover:bg-yellow-300 transition-colors">
-                      <span>ENTRAR</span>
-                      <ArrowRight className="h-3 w-3" />
+                    <div className="w-full py-1 text-[11px] font-bold bg-white text-[#000080] win95-button group-hover:bg-yellow-400 group-hover:text-black">
+                      INGRESAR
                     </div>
                   </button>
 
                   {/* Polymarket Bot Square Button */}
                   <button
-                    onClick={() => setLoadingWorkspace({ path: '/polymarket', name: 'TRADEMERC POLYMARKET BOT', desc: 'Mercados de Predicción · Ventaja +EV' })}
-                    className="win95-button aspect-square p-4 font-mono bg-[#008080] text-white flex flex-col items-center justify-between text-center group cursor-pointer hover:bg-[#009090] transition-all border-2 border-white/20"
+                    onClick={() => setLoadingWorkspace({ path: '/polymarket', name: 'POLYMARKET BOT', desc: 'Mercados de Predicción · Algoritmo +EV & Criterio de Kelly' })}
+                    className="win95-button aspect-square p-4 font-mono bg-[#008080] text-white flex flex-col items-center justify-between text-center group cursor-pointer hover:bg-[#00a0a0] transition-all border-2 border-white/20"
                   >
-                    <div className="w-12 h-12 rounded-full bg-emerald-300/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-emerald-400/20 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <TrendingUp className="h-7 w-7 text-emerald-300" />
                     </div>
 
                     <div className="space-y-1">
-                      <div className="font-bold text-xs leading-snug text-white group-hover:text-emerald-200">
-                        TRADEMERC POLYMARKET BOT
-                      </div>
-                      <div className="text-[10px] text-slate-100 leading-tight">
-                        Mercados de Predicción
-                        <br />
-                        Ventaja +EV & Kelly
-                      </div>
+                      <div className="font-bold text-sm tracking-wide">POLYMARKET BOT</div>
+                      <div className="text-[10px] text-teal-200">Predicción Cuantitativa CLOB</div>
                     </div>
 
-                    <div className="w-full py-1.5 px-2 bg-emerald-300 text-black font-bold text-[11px] flex items-center justify-center gap-1 group-hover:bg-emerald-200 transition-colors">
-                      <span>ENTRAR</span>
-                      <ArrowRight className="h-3 w-3" />
+                    <div className="w-full py-1 text-[11px] font-bold bg-white text-[#008080] win95-button group-hover:bg-emerald-300 group-hover:text-black">
+                      INGRESAR
                     </div>
                   </button>
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="win95-panel p-2 flex items-center justify-between text-[11px] font-mono text-black border-t border-[#808080]">
+            <div className="truncate text-[10px]">Derechos reservados, hecho por Elkin Pabon, se prohibe el uso no autorizado.</div>
+            <div className="shrink-0 text-[10px] font-bold text-[#008000]">SECURE</div>
           </div>
         </div>
       </div>
