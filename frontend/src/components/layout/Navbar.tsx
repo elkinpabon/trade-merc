@@ -53,7 +53,7 @@ export const Navbar: React.FC = () => {
       <header className="win95-window mb-2">
         <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 shrink-0">
-            <img src="/icon.png" alt="TRADEMERC Logo" className="h-4 w-4 rounded-sm border border-white/40 object-cover" />
+            <img src="/icon.png" alt="TRADEMERC Logo" className="h-5 w-5 object-contain" />
             <span className="font-bold text-xs font-mono">{timeStr}</span>
             <span className="text-emerald-300 font-mono text-[10px] sm:text-[11px] truncate">| POLYMARKET.EXE</span>
           </div>
@@ -78,7 +78,7 @@ export const Navbar: React.FC = () => {
       {/* Titlebar */}
       <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1">
         <div className="flex items-center gap-1.5 shrink-0">
-          <img src="/icon.png" alt="TRADEMERC Logo" className="h-4 w-4 rounded-sm border border-white/40 object-cover" />
+          <img src="/icon.png" alt="TRADEMERC Logo" className="h-5 w-5 object-contain" />
           <span className="font-bold text-xs font-mono">{timeStr}</span>
           <span className="text-slate-300 font-mono text-[10px] sm:text-[11px] truncate">| TRADEMERC.EXE</span>
         </div>

@@ -54,7 +54,7 @@ export default function LoginPage() {
           {/* Title Bar */}
           <div className="win95-titlebar mb-3">
             <div className="flex items-center gap-2">
-              <Lock className="h-3.5 w-3.5 text-white" />
+              <img src="/icon.png" alt="TRADEMERC Logo" className="h-4 w-4 object-contain" />
               <span>TRADEMERC - Autenticación de Usuario</span>
             </div>
             <div className="flex items-center gap-1">
