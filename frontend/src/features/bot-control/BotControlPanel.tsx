@@ -21,11 +21,11 @@ export const BotControlPanel: React.FC = () => {
       if (isRunning) {
         await api.stopBot();
         setIsRunning(false);
-        setStatusMsg('Bot pausado correctamente.');
+        setStatusMsg('Bot Crypto ML pausado correctamente.');
       } else {
         await api.startBot();
         setIsRunning(true);
-        setStatusMsg('Bot activado en Piloto Automático.');
+        setStatusMsg('Bot Crypto ML activado en Piloto Automático.');
       }
     } catch (err: any) {
       setStatusMsg(`Error: ${err.message}`);
@@ -42,9 +42,9 @@ export const BotControlPanel: React.FC = () => {
 
     try {
       await api.updateConfig({ stop_loss_pct: sl, take_profit_pct: tp });
-      setStatusMsg(`Modo de riesgo [${preset.toUpperCase()}] aplicado.`);
+      setStatusMsg(`Perfil de riesgo [${preset.toUpperCase()}] aplicado.`);
     } catch (err: any) {
-      setStatusMsg(`Error al aplicar preset: ${err.message}`);
+      setStatusMsg(`Error al aplicar perfil: ${err.message}`);
     }
   };
 
@@ -52,7 +52,7 @@ export const BotControlPanel: React.FC = () => {
     <div className="max-w-2xl mx-auto space-y-3 font-sans text-black">
       <div className="win95-panel p-3 space-y-3">
         <div className="win95-titlebar">
-          <span>Configuración del Bot (Bot Config)</span>
+          <span>Configuración del Bot Crypto Spot (Bot Config)</span>
           <span>TRADEMERC Control</span>
         </div>
 
@@ -63,7 +63,7 @@ export const BotControlPanel: React.FC = () => {
         )}
 
         <div className="win95-inset bg-white p-4 text-center space-y-3">
-          <h2 className="text-sm font-bold font-mono uppercase">Estado del Piloto Automático</h2>
+          <h2 className="text-sm font-bold font-mono uppercase text-[#000080]">Estado del Bot Crypto Spot ML</h2>
           <button
             onClick={handleToggleBot}
             disabled={loading}
@@ -72,12 +72,12 @@ export const BotControlPanel: React.FC = () => {
             }`}
           >
             {isRunning ? <Square className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
-            <span>{loading ? 'PROCESANDO...' : isRunning ? 'PAUSAR BOT AUTOMÁTICO' : 'ACTIVAR BOT AUTOMÁTICO'}</span>
+            <span>{loading ? 'PROCESANDO...' : isRunning ? 'PAUSAR BOT CRYPTO ML' : 'ACTIVAR BOT CRYPTO ML'}</span>
           </button>
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-bold font-mono">Selecciona el Perfil de Riesgo:</div>
+          <div className="text-xs font-bold font-mono">Selecciona el Perfil de Riesgo Crypto:</div>
           <div className="grid grid-cols-3 gap-2">
             {[
               { id: 'conservador', label: 'Conservador', desc: 'SL 1.0% / TP 2.0%' },
@@ -88,11 +88,11 @@ export const BotControlPanel: React.FC = () => {
                 key={item.id}
                 onClick={() => applyPreset(item.id as any)}
                 className={`win95-button p-3 text-center text-xs font-mono ${
-                  riskPreset === item.id ? 'win95-button-active' : ''
+                  riskPreset === item.id ? 'win95-button-active bg-[#000080] text-white font-bold' : 'bg-white'
                 }`}
               >
-                <div className="font-bold">{item.label}</div>
-                <div className="text-[10px] opacity-75 mt-1">{item.desc}</div>
+                <div>{item.label}</div>
+                <div className="text-[10px] opacity-75">{item.desc}</div>
               </button>
             ))}
           </div>
