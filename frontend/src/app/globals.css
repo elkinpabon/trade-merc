@@ -86,6 +86,17 @@ body {
   justify-content: space-between;
 }
 
+/* Black font outline / stroke for logs console text */
+.log-text-outline {
+  text-shadow: 
+    -1px -1px 0 #000000,  
+     1px -1px 0 #000000,
+    -1px  1px 0 #000000,
+     1px  1px 0 #000000,
+     0px  0px 2px #000000;
+  -webkit-text-stroke: 0.35px #000000;
+}
+
 /* Custom Scrollbars in Win95 Style */
 ::-webkit-scrollbar {
   width: 16px;
@@ -98,13 +109,11 @@ body {
   border-left: 1px solid #ffffff;
   border-right: 1px solid #404040;
   border-bottom: 1px solid #404040;
-  height: 16px;
-  width: 16px;
 }
 ::-webkit-scrollbar-thumb {
   background-color: #c0c0c0;
-  border-top: 2px solid #ffffff;
-  border-left: 2px solid #ffffff;
-  border-right: 2px solid #404040;
-  border-bottom: 2px solid #404040;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #404040;
+  border-bottom: 1px solid #404040;
 }

@@ -228,7 +228,7 @@ export const DashboardOverview: React.FC = () => {
           <span className="animate-pulse text-[#00ff00] font-bold">SCANNING LIVE</span>
         </div>
 
-        <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-48 overflow-y-auto space-y-1">
+        <div className="win95-inset bg-black p-3 font-mono text-xs text-[#00ff00] h-48 overflow-y-auto space-y-1 log-text-outline">
           <div className="text-[#808080] text-[10px] border-b border-[#333] pb-1 mb-2">
             === LOGS DE ANÁLISIS EN VIVO CRYPTO ===
           </div>
