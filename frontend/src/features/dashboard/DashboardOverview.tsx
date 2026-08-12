@@ -154,21 +154,21 @@ export const DashboardOverview: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left: Chart Container */}
         <div className="lg:col-span-2 win95-panel p-3 space-y-2">
-          <div className="win95-titlebar flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5" />
-              <span>Gráfico de Precios en Vivo · {selectedSymbol} · 5m</span>
+          <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-[11px] sm:text-xs">
+            <div className="flex items-center gap-2 truncate">
+              <Activity className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Gráfico de Precios · {selectedSymbol} · 5m</span>
             </div>
-            <span>Binance API Feed</span>
+            <span className="shrink-0">Binance API</span>
           </div>
           <PriceChart candles={candles} height={350} loading={chartLoading} symbol={selectedSymbol} />
         </div>
 
         {/* Right: Markets List */}
         <div className="win95-panel p-3 space-y-2">
-          <div className="win95-titlebar">
-            <span>Mercados Cripto ({scannedMarkets.length})</span>
-            <span>Binance · Realtime</span>
+          <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-[11px] sm:text-xs">
+            <span className="truncate">Mercados Cripto ({scannedMarkets.length})</span>
+            <span className="shrink-0">Binance</span>
           </div>
 
           {/* Search Box */}

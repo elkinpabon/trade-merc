@@ -102,12 +102,12 @@ export const PolymarketView: React.FC = () => {
     <div className="space-y-3 font-sans text-black">
       {/* Top Banner Toolbar */}
       <div className="win95-window p-2">
-        <div className="win95-titlebar flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 shrink-0">
             <TrendingUp className="h-4 w-4 text-emerald-300" />
-            <span className="font-bold text-xs">POLYMARKET</span>
+            <span className="font-bold text-xs font-mono">POLYMARKET</span>
           </div>
-          <span className="text-emerald-300 font-mono text-[11px] font-bold">
+          <span className="text-emerald-300 font-mono text-[9px] sm:text-[11px] font-bold truncate max-w-full">
             RED: POLYGON CLOB & GAMMA API · ONLINE
           </span>
         </div>
@@ -180,9 +180,9 @@ export const PolymarketView: React.FC = () => {
         {/* Active Prediction Markets Grid (2 Cols) */}
         <div className="lg:col-span-2 space-y-2">
           <div className="win95-window">
-            <div className="win95-titlebar flex items-center justify-between">
-              <span>Mercados de Predicción de Alto Volumen</span>
-              <span>{markets.length} Eventos Escaneados</span>
+            <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-[11px] sm:text-xs">
+              <span className="truncate">Mercados de Predicción de Alto Volumen</span>
+              <span className="shrink-0">{markets.length} Eventos Escaneados</span>
             </div>
 
             <div className="p-2 space-y-3 max-h-[500px] overflow-y-auto bg-[#c0c0c0]">
@@ -258,12 +258,12 @@ export const PolymarketView: React.FC = () => {
         {/* Live Tactical Prediction Logs Console (1 Col) */}
         <div className="space-y-3">
           <div className="win95-window">
-            <div className="win95-titlebar flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Terminal className="h-3.5 w-3.5 text-white" />
-                <span>CONSOLA POLYMARKET</span>
+            <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-[11px] sm:text-xs">
+              <div className="flex items-center gap-2 truncate">
+                <Terminal className="h-3.5 w-3.5 text-white shrink-0" />
+                <span className="truncate">CONSOLA POLYMARKET</span>
               </div>
-              <span className="animate-pulse text-[#00ff00] font-bold text-[10px]">ESCANEANDO</span>
+              <span className="animate-pulse text-[#00ff00] font-bold text-[10px] shrink-0">ESCANEANDO</span>
             </div>
 
             <div className="win95-inset bg-white p-3 font-mono text-xs text-black h-[480px] overflow-y-auto space-y-1">
@@ -300,9 +300,9 @@ export const PolymarketView: React.FC = () => {
 
       {/* Active Positions Table Panel */}
       <div className="win95-panel p-3 space-y-3">
-        <div className="win95-titlebar flex items-center justify-between">
-          <span>Contratos Comprados Actualmente</span>
-          <span>{positions.length} Posiciones Activas</span>
+        <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1 text-[11px] sm:text-xs">
+          <span className="truncate">Contratos Comprados Actualmente</span>
+          <span className="shrink-0">{positions.length} Posiciones Activas</span>
         </div>
 
         {positions.length > 0 ? (

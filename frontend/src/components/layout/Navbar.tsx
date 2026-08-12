@@ -51,17 +51,17 @@ export const Navbar: React.FC = () => {
   if (isPolymarketPage) {
     return (
       <header className="win95-window mb-2">
-        <div className="win95-titlebar">
-          <div className="flex items-center gap-2">
+        <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1">
+          <div className="flex items-center gap-1.5 shrink-0">
             <img src="/icon.png" alt="TRADEMERC Logo" className="h-4 w-4 rounded-sm border border-white/40 object-cover" />
-            <span className="font-bold text-xs">{timeStr}</span>
-            <span className="text-emerald-300 font-mono text-[11px]">| POLYMARKET.EXE</span>
+            <span className="font-bold text-xs font-mono">{timeStr}</span>
+            <span className="text-emerald-300 font-mono text-[10px] sm:text-[11px] truncate">| POLYMARKET.EXE</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-mono text-emerald-300 font-bold">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+            <span className="text-[9px] sm:text-[11px] font-mono text-emerald-300 font-bold truncate max-w-full">
               Polygon CLOB & Gamma API · online
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <button className="win95-button px-1.5 py-0 text-[10px] text-black">_</button>
               <button className="win95-button px-1.5 py-0 text-[10px] text-black">▢</button>
               <button className="win95-button px-1.5 py-0 text-[10px] text-black font-bold">✕</button>
@@ -76,17 +76,17 @@ export const Navbar: React.FC = () => {
   return (
     <header className="win95-window mb-2">
       {/* Titlebar */}
-      <div className="win95-titlebar">
-        <div className="flex items-center gap-2">
+      <div className="win95-titlebar flex flex-wrap sm:flex-nowrap items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
           <img src="/icon.png" alt="TRADEMERC Logo" className="h-4 w-4 rounded-sm border border-white/40 object-cover" />
-          <span className="font-bold text-xs">{timeStr}</span>
-          <span className="text-slate-300 font-mono text-[11px]">| TRADEMERC.EXE</span>
+          <span className="font-bold text-xs font-mono">{timeStr}</span>
+          <span className="text-slate-300 font-mono text-[10px] sm:text-[11px] truncate">| TRADEMERC.EXE</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] font-mono text-emerald-300 font-bold">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+          <span className="text-[9px] sm:text-[11px] font-mono text-emerald-300 font-bold truncate max-w-full">
             Binance · {isConnected ? 'online' : 'connecting'}
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button className="win95-button px-1.5 py-0 text-[10px] text-black">_</button>
             <button className="win95-button px-1.5 py-0 text-[10px] text-black">▢</button>
             <button className="win95-button px-1.5 py-0 text-[10px] text-black font-bold">✕</button>
@@ -96,26 +96,26 @@ export const Navbar: React.FC = () => {
 
       {/* Menu / Bot Action Toolbar */}
       <div className="p-2 bg-[#c0c0c0] flex flex-wrap items-center justify-between gap-2 border-b border-[#808080]">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={toggleBot}
             disabled={loading}
-            className={`win95-button px-4 py-1 text-xs font-bold font-mono flex items-center gap-1.5 ${
+            className={`win95-button px-3 sm:px-4 py-1 text-xs font-bold font-mono flex items-center gap-1.5 ${
               isRunning ? 'bg-[#cc0000] text-white' : 'bg-[#008000] text-white'
             }`}
           >
             {isRunning ? <Square className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current" />}
-            <span>{loading ? 'CARGANDO...' : isRunning ? 'PAUSAR BOT CRYPTO ML' : 'ACTIVAR BOT CRYPTO ML'}</span>
+            <span className="truncate">{loading ? 'CARGANDO...' : isRunning ? 'PAUSAR BOT CRYPTO ML' : 'ACTIVAR BOT CRYPTO ML'}</span>
           </button>
 
-          <span className="text-xs font-mono text-black font-bold px-2 py-1 win95-inset bg-white">
+          <span className="text-[10px] sm:text-xs font-mono text-black font-bold px-2 py-1 win95-inset bg-white truncate max-w-full">
             MODO: CRYPTO SPOT SIMULACIÓN
           </span>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono text-black">
-          <span className="win95-inset px-2 py-0.5 bg-white font-bold text-[#008000]">
-            ESTADO CRYPTO: {isRunning ? 'EJECUTANDO 24/7' : 'EN ESPERA'}
+          <span className="win95-inset px-2 py-0.5 bg-white font-bold text-[#008000] text-[10px] sm:text-xs">
+            ESTADO: {isRunning ? 'EJECUTANDO 24/7' : 'EN ESPERA'}
           </span>
         </div>
       </div>
