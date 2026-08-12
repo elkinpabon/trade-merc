@@ -58,7 +58,7 @@ class PricePredictionEngine:
         y_future_norm = slope * x_future + intercept
         predicted_price = y_future_norm * y_std + y_mean
 
-        # Slope percentage (annualized-ish)
+        # Slope percentage
         slope_pct = (slope * y_std / y_mean * 100) if y_mean > 0 else 0.0
         direction = 1 if slope > 0.01 else (-1 if slope < -0.01 else 0)
 
@@ -71,388 +71,182 @@ class PricePredictionEngine:
 
     @staticmethod
     def detect_candlestick_patterns(df: pd.DataFrame) -> dict:
-        """
-        Detects key Japanese candlestick reversal/continuation patterns.
-        Returns pattern name, bullish/bearish bias, and confidence.
-        """
         if len(df) < 5:
             return {"pattern": "NONE", "bias": 0, "confidence": 0.0}
 
         c = df.iloc[-1]
         p = df.iloc[-2]
-        pp = df.iloc[-3]
 
         o, h, l, cl = float(c['open']), float(c['high']), float(c['low']), float(c['close'])
         po, ph, pl, pcl = float(p['open']), float(p['high']), float(p['low']), float(p['close'])
         body = abs(cl - o)
         upper_wick = h - max(o, cl)
         lower_wick = min(o, cl) - l
-        candle_range = h - l if h - l > 0 else 0.0001
-
-        prev_body = abs(pcl - po)
-        prev_range = ph - pl if ph - pl > 0 else 0.0001
 
         patterns = []
-
-        # HAMMER (bullish reversal): Small body at top, long lower wick
         if lower_wick > body * 2 and upper_wick < body * 0.5 and cl > o:
             patterns.append(("HAMMER", 1, 0.75))
-
-        # INVERTED HAMMER (bullish): Small body at bottom, long upper wick after downtrend
-        if upper_wick > body * 2 and lower_wick < body * 0.5:
-            patterns.append(("INVERTED_HAMMER", 1, 0.60))
-
-        # BULLISH ENGULFING: Current green candle engulfs previous red
-        if pcl < po and cl > o and cl > po and o < pcl and body > prev_body:
-            patterns.append(("BULLISH_ENGULFING", 1, 0.80))
-
-        # BEARISH ENGULFING: Current red candle engulfs previous green
-        if pcl > po and cl < o and cl < po and o > pcl and body > prev_body:
-            patterns.append(("BEARISH_ENGULFING", -1, 0.80))
-
-        # DOJI: Very small body relative to range
-        if body < candle_range * 0.1 and candle_range > 0:
-            patterns.append(("DOJI", 0, 0.50))
-
-        # MORNING STAR (3-candle bullish reversal)
-        ppo, ppcl = float(pp['open']), float(pp['close'])
-        if ppcl < ppo and abs(pcl - po) < prev_range * 0.3 and cl > o and cl > (ppo + ppcl) / 2:
-            patterns.append(("MORNING_STAR", 1, 0.85))
-
-        # EVENING STAR (3-candle bearish reversal)
-        if ppcl > ppo and abs(pcl - po) < prev_range * 0.3 and cl < o and cl < (ppo + ppcl) / 2:
-            patterns.append(("EVENING_STAR", -1, 0.85))
-
-        # THREE WHITE SOLDIERS
-        if len(df) >= 4:
-            c1, c2, c3 = df.iloc[-3], df.iloc[-2], df.iloc[-1]
-            if (float(c1['close']) > float(c1['open']) and
-                float(c2['close']) > float(c2['open']) and
-                float(c3['close']) > float(c3['open']) and
-                float(c2['close']) > float(c1['close']) and
-                float(c3['close']) > float(c2['close'])):
-                patterns.append(("THREE_WHITE_SOLDIERS", 1, 0.85))
+        if cl > o and pcl < po and cl > po and o < pcl:
+            patterns.append(("BULLISH_ENGULFING", 1, 0.85))
+        if lower_wick > body * 2 and upper_wick < body * 0.5 and cl < o:
+            patterns.append(("SHOOTING_STAR", -1, 0.75))
+        if cl < o and pcl > po and cl < po and o > pcl:
+            patterns.append(("BEARISH_ENGULFING", -1, 0.85))
 
         if not patterns:
             return {"pattern": "NONE", "bias": 0, "confidence": 0.0}
 
-        # Return highest confidence pattern
         best = max(patterns, key=lambda x: x[2])
         return {"pattern": best[0], "bias": best[1], "confidence": best[2]}
 
     @staticmethod
-    def detect_divergence(df: pd.DataFrame) -> dict:
-        """
-        Detects bullish/bearish divergence between price and RSI.
-        Bullish divergence: Price makes lower low but RSI makes higher low.
-        Bearish divergence: Price makes higher high but RSI makes lower high.
-        """
-        if len(df) < 20 or 'rsi' not in df.columns:
+    def detect_divergence(df: pd.DataFrame, window: int = 14) -> dict:
+        if len(df) < window + 5 or 'rsi' not in df.columns:
             return {"type": "NONE", "strength": 0.0}
 
-        lookback = min(20, len(df))
-        recent = df.tail(lookback)
-        prices = recent['close'].values
-        rsis = recent['rsi'].values
+        prices = df['close'].iloc[-window:].values
+        rsi_vals = df['rsi'].iloc[-window:].values
 
-        mid = lookback // 2
+        price_min_idx = np.argmin(prices)
+        price_max_idx = np.argmax(prices)
+        rsi_min_idx = np.argmin(rsi_vals)
+        rsi_max_idx = np.argmax(rsi_vals)
 
-        price_low1 = np.min(prices[:mid])
-        price_low2 = np.min(prices[mid:])
-        rsi_low1 = np.min(rsis[:mid])
-        rsi_low2 = np.min(rsis[mid:])
+        # Bullish divergence: price makes new low, RSI makes higher low
+        if price_min_idx > window // 2 and rsi_min_idx < price_min_idx:
+            if prices[-1] <= prices[price_min_idx] and rsi_vals[-1] > rsi_vals[rsi_min_idx]:
+                strength = float(np.abs(rsi_vals[-1] - rsi_vals[rsi_min_idx]) / 50.0)
+                return {"type": "BULLISH_DIVERGENCE", "strength": min(1.0, strength)}
 
-        price_high1 = np.max(prices[:mid])
-        price_high2 = np.max(prices[mid:])
-        rsi_high1 = np.max(rsis[:mid])
-        rsi_high2 = np.max(rsis[mid:])
-
-        # Bullish divergence
-        if price_low2 < price_low1 and rsi_low2 > rsi_low1:
-            strength = min(1.0, abs(rsi_low2 - rsi_low1) / 10.0)
-            return {"type": "BULLISH_DIVERGENCE", "strength": strength}
-
-        # Bearish divergence
-        if price_high2 > price_high1 and rsi_high2 < rsi_high1:
-            strength = min(1.0, abs(rsi_high1 - rsi_high2) / 10.0)
-            return {"type": "BEARISH_DIVERGENCE", "strength": strength}
+        # Bearish divergence: price makes new high, RSI makes lower high
+        if price_max_idx > window // 2 and rsi_max_idx < price_max_idx:
+            if prices[-1] >= prices[price_max_idx] and rsi_vals[-1] < rsi_vals[rsi_max_idx]:
+                strength = float(np.abs(rsi_vals[rsi_max_idx] - rsi_vals[-1]) / 50.0)
+                return {"type": "BEARISH_DIVERGENCE", "strength": min(1.0, strength)}
 
         return {"type": "NONE", "strength": 0.0}
 
     @staticmethod
     def compute_market_regime(df: pd.DataFrame) -> str:
-        """
-        Determines current market regime: TRENDING_UP, TRENDING_DOWN, RANGING, or VOLATILE.
-        Uses ADX + ATR + price position relative to Bollinger Bands.
-        """
-        if len(df) < 20:
-            return "UNKNOWN"
+        if len(df) < 20 or 'adx' not in df.columns:
+            return "RANGING"
 
         latest = df.iloc[-1]
         adx = float(latest.get('adx', 0))
+        ema_fast = float(latest.get('ema_fast', 0))
+        ema_slow = float(latest.get('ema_slow', 0))
         atr = float(latest.get('atr', 0))
         close = float(latest.get('close', 1))
-        bb_upper = float(latest.get('bb_upper', close))
-        bb_lower = float(latest.get('bb_lower', close))
-        ema_fast = float(latest.get('ema_fast', close))
-        ema_slow = float(latest.get('ema_slow', close))
 
-        atr_pct = (atr / close * 100) if close > 0 else 0
+        volatility_pct = (atr / close) * 100 if close > 0 else 0
 
-        if adx > 30 and ema_fast > ema_slow:
-            return "TRENDING_UP"
-        elif adx > 30 and ema_fast < ema_slow:
-            return "TRENDING_DOWN"
-        elif atr_pct > 3.0:
+        if volatility_pct > 3.0:
             return "VOLATILE"
+        elif adx > 25 and ema_fast > ema_slow:
+            return "TRENDING_UP"
+        elif adx > 25 and ema_fast < ema_slow:
+            return "TRENDING_DOWN"
         else:
             return "RANGING"
 
 
 class StrategyService:
-    """
-    Advanced Multi-Factor Quantitative Trading Strategy Engine with ML Prediction.
-    Scores each market on a 0-100 scale using Trend, Momentum, Volume,
-    Volatility, Pattern Recognition, and Price Prediction factors.
-    Only high-conviction setups (score >= 60) with ML confirmation trigger entries.
-    """
-
-    def __init__(self, config: BotConfig):
+    def __init__(self, config: Optional[BotConfig] = None):
+        if config is None:
+            config = BotConfig.get_active()
         self.config = config
         self.predictor = PricePredictionEngine()
+        self.taker_fee = 0.00075  # 0.075% BNB taker fee
+        self.slippage = 0.0005   # 0.05% slippage
+        self.total_cost = (self.taker_fee * 2) + self.slippage  # ~0.20%
+        self.tp_target = (self.config.take_profit_pct or 3.0) / 100.0
+        self.sl_target = (self.config.stop_loss_pct or 1.5) / 100.0
 
-    def _score_trend(self, latest: pd.Series) -> tuple:
-        """Trend Factor Score (0-20 points): EMA alignment + ADX strength."""
-        score = 0.0
-        details = []
-
-        ema_fast = float(latest.get('ema_fast', 0))
-        ema_slow = float(latest.get('ema_slow', 0))
-        adx = float(latest.get('adx', 0))
-        close = float(latest.get('close', 0))
-        vwap = float(latest.get('vwap', 0))
-
-        # EMA alignment (0-8 pts)
-        if ema_fast > ema_slow:
-            ema_spread_pct = ((ema_fast - ema_slow) / ema_slow * 100) if ema_slow > 0 else 0
-            ema_pts = min(8.0, 4.0 + ema_spread_pct * 2)
-            score += ema_pts
-            details.append(f"EMA alcista +{ema_pts:.1f}")
-        else:
-            details.append("EMA bajista +0")
-
-        # ADX strength (0-8 pts)
-        if adx >= 40:
-            score += 8.0
-            details.append(f"ADX fuerte({adx:.0f}) +8")
-        elif adx >= 25:
-            pts = 4.0 + (adx - 25) / 15 * 4
-            score += pts
-            details.append(f"ADX moderado({adx:.0f}) +{pts:.1f}")
-        elif adx >= 15:
-            pts = (adx - 15) / 10 * 4
-            score += pts
-            details.append(f"ADX debil({adx:.0f}) +{pts:.1f}")
-
-        # Price above VWAP (0-4 pts)
-        if close > vwap and vwap > 0:
-            score += 4.0
-            details.append("Sobre VWAP +4")
-
-        return min(20.0, score), details
-
-    def _score_momentum(self, latest: pd.Series) -> tuple:
-        """Momentum Factor Score (0-20 points): RSI + MACD + Stochastic RSI."""
-        score = 0.0
-        details = []
-
-        rsi = float(latest.get('rsi', 50))
-        macd_hist = float(latest.get('macd_histogram', 0))
-        macd_bullish = bool(latest.get('macd_bullish_cross', False))
-        stoch_k = float(latest.get('stoch_rsi_k', 50))
-        stoch_d = float(latest.get('stoch_rsi_d', 50))
-
-        # RSI sweet spot (0-8 pts)
-        if 45 <= rsi <= 65:
-            score += 8.0
-            details.append(f"RSI optimo({rsi:.0f}) +8")
-        elif 35 <= rsi <= 75:
-            score += 4.0
-            details.append(f"RSI aceptable({rsi:.0f}) +4")
-        elif rsi < 30:
-            score += 6.0
-            details.append(f"RSI sobreventa({rsi:.0f}) +6")
-
-        # MACD histogram (0-6 pts)
-        if macd_hist > 0:
-            pts = min(6.0, 3.0 + abs(macd_hist) * 80)
-            score += pts
-            details.append(f"MACD+ +{pts:.1f}")
-        elif macd_bullish:
-            score += 5.0
-            details.append("MACD cruce +5")
-
-        # Stochastic RSI (0-6 pts)
-        if stoch_k < 25 and stoch_k > stoch_d:
-            score += 6.0
-            details.append(f"StochRSI rebote +6")
-        elif stoch_k > stoch_d and stoch_k < 80:
-            score += 3.0
-            details.append(f"StochRSI alcista +3")
-
-        return min(20.0, score), details
-
-    def _score_volume(self, latest: pd.Series, df: pd.DataFrame) -> tuple:
-        """Volume Factor Score (0-20 points): Volume surge + OBV confirmation."""
-        score = 0.0
-        details = []
-
-        vol_ratio = float(latest.get('vol_ratio', 1.0))
-        obv_current = float(latest.get('obv', 0))
-
-        # Volume surge (0-12 pts)
-        if vol_ratio >= 2.5:
-            score += 12.0
-            details.append(f"Vol explosivo({vol_ratio:.1f}x) +12")
-        elif vol_ratio >= 1.5:
-            pts = 6.0 + (vol_ratio - 1.5) * 6
-            score += pts
-            details.append(f"Vol alto({vol_ratio:.1f}x) +{pts:.1f}")
-        elif vol_ratio >= 1.0:
-            score += 3.0
-            details.append(f"Vol normal({vol_ratio:.1f}x) +3")
-
-        # OBV trend (0-8 pts)
-        if len(df) >= 10:
-            obv_sma = df['obv'].tail(10).mean()
-            if obv_current > obv_sma:
-                score += 8.0
-                details.append("OBV alcista +8")
-            elif obv_current > obv_sma * 0.95:
-                score += 4.0
-                details.append("OBV neutral +4")
-
-        return min(20.0, score), details
-
-    def _score_volatility(self, latest: pd.Series) -> tuple:
-        """Volatility Factor Score (0-15 points): BB position + ATR quality."""
-        score = 0.0
-        details = []
-
-        close = float(latest.get('close', 0))
-        bb_upper = float(latest.get('bb_upper', close))
-        bb_middle = float(latest.get('bb_middle', close))
-        bb_lower = float(latest.get('bb_lower', close))
-        bb_width = float(latest.get('bb_width', 0))
-        atr = float(latest.get('atr', 0))
-
-        # BB position (0-8 pts)
-        if close > bb_middle and (bb_upper - bb_middle) > 0:
-            bb_pos = (close - bb_middle) / (bb_upper - bb_middle)
-            if bb_pos < 0.7:
-                pts = 6.0 + bb_pos * 2
-                score += pts
-                details.append(f"BB alcista({bb_pos:.0%}) +{pts:.1f}")
-            else:
-                score += 3.0
-                details.append(f"BB techo +3")
-        elif close > bb_lower and (bb_middle - bb_lower) > 0:
-            bb_pos = (close - bb_lower) / (bb_middle - bb_lower)
-            if bb_pos < 0.3:
-                score += 7.0
-                details.append(f"BB rebote +7")
-
-        # BB squeeze (0-4 pts)
-        if bb_width < 0.03:
-            score += 4.0
-            details.append(f"BB squeeze +4")
-        elif bb_width < 0.05:
-            score += 2.0
-
-        # ATR quality (0-3 pts)
-        if atr > 0 and close > 0:
-            atr_pct = (atr / close) * 100
-            if 0.5 <= atr_pct <= 3.0:
-                score += 3.0
-                details.append(f"ATR optimo +3")
-
-        return min(15.0, score), details
-
-    def _score_prediction(self, df: pd.DataFrame) -> tuple:
-        """ML Prediction Score (0-15 points): Linear regression + candlestick patterns + divergence."""
-        score = 0.0
-        details = []
-
-        close_values = df['close'].values
-
-        # Linear Regression Prediction (0-6 pts)
-        lr = self.predictor.linear_regression_predict(close_values, forecast_periods=3)
-        if lr['direction'] == 1 and lr['r_squared'] > 0.3:
-            pts = min(6.0, 3.0 + lr['r_squared'] * 4)
-            score += pts
-            details.append(f"LR alcista(R2={lr['r_squared']:.2f}) +{pts:.1f}")
-        elif lr['direction'] == -1 and lr['r_squared'] > 0.3:
-            details.append(f"LR bajista(R2={lr['r_squared']:.2f}) +0")
-
-        # Candlestick Pattern (0-5 pts)
-        pattern = self.predictor.detect_candlestick_patterns(df)
-        if pattern['bias'] == 1 and pattern['confidence'] > 0.5:
-            pts = min(5.0, pattern['confidence'] * 5)
-            score += pts
-            details.append(f"{pattern['pattern']}({pattern['confidence']:.0%}) +{pts:.1f}")
-        elif pattern['bias'] == -1:
-            details.append(f"{pattern['pattern']} bajista +0")
-
-        # Divergence Detection (0-4 pts)
-        div = self.predictor.detect_divergence(df)
-        if div['type'] == 'BULLISH_DIVERGENCE':
-            pts = min(4.0, 2.0 + div['strength'] * 3)
-            score += pts
-            details.append(f"Div.Alcista({div['strength']:.1f}) +{pts:.1f}")
-        elif div['type'] == 'BEARISH_DIVERGENCE':
-            details.append(f"Div.Bajista +0")
-
-        return min(15.0, score), details
-
-    def _score_regime(self, df: pd.DataFrame) -> tuple:
-        """Market Regime Score (0-10 points): Adaptive mode detection."""
-        score = 0.0
-        details = []
-
-        regime = self.predictor.compute_market_regime(df)
-
-        if regime == "TRENDING_UP":
-            score += 10.0
-            details.append("Regimen TENDENCIA ALCISTA +10")
-        elif regime == "RANGING":
-            score += 5.0
-            details.append("Regimen RANGO +5")
-        elif regime == "VOLATILE":
-            score += 3.0
-            details.append("Regimen VOLATIL +3")
-        else:
-            details.append(f"Regimen {regime} +0")
-
-        return min(10.0, score), details
-
-    def compute_composite_score(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Computes the full multi-factor composite score with ML prediction."""
+    def compute_composite_score(self, df: pd.DataFrame) -> dict:
         latest = df.iloc[-1]
 
-        trend_score, trend_details = self._score_trend(latest)
-        momentum_score, momentum_details = self._score_momentum(latest)
-        volume_score, volume_details = self._score_volume(latest, df)
-        volatility_score, volatility_details = self._score_volatility(latest)
-        prediction_score, prediction_details = self._score_prediction(df)
-        regime_score, regime_details = self._score_regime(df)
+        close = float(latest['close'])
+        ema_fast = float(latest.get('ema_fast', close))
+        ema_slow = float(latest.get('ema_slow', close))
+        rsi = float(latest.get('rsi', 50))
+        macd_hist = float(latest.get('macd_histogram', 0))
+        adx = float(latest.get('adx', 0))
+        vol_ratio = float(latest.get('vol_ratio', 1.0))
+        bb_upper = float(latest.get('bb_upper', close * 1.02))
+        bb_lower = float(latest.get('bb_lower', close * 0.98))
+        vwap = float(latest.get('vwap', close))
 
-        total_score = trend_score + momentum_score + volume_score + volatility_score + prediction_score + regime_score
+        # 1. Trend (25 pts)
+        trend_score = 0.0
+        trend_details = []
+        if ema_fast > ema_slow:
+            trend_score += 15.0
+            trend_details.append("EMA Fast > Slow (+15)")
+        if adx > 20:
+            trend_score += 10.0
+            trend_details.append(f"ADX={adx:.1f} (+10)")
 
-        # ML Prediction data
+        # 2. Momentum (20 pts)
+        momentum_score = 0.0
+        momentum_details = []
+        if 40 <= rsi <= 65:
+            momentum_score += 10.0
+            momentum_details.append(f"RSI={rsi:.1f} óptimo (+10)")
+        if macd_hist > 0:
+            momentum_score += 10.0
+            momentum_details.append("MACD Hist > 0 (+10)")
+
+        # 3. Volume (20 pts)
+        volume_score = 0.0
+        volume_details = []
+        if vol_ratio > 1.2:
+            volume_score += 10.0
+            volume_details.append(f"Vol Ratio={vol_ratio:.2f} (+10)")
+        if close > vwap:
+            volume_score += 10.0
+            volume_details.append("Precio > VWAP (+10)")
+
+        # 4. Volatility (15 pts)
+        volatility_score = 0.0
+        volatility_details = []
+        if close > (bb_lower + (bb_upper - bb_lower) * 0.3):
+            volatility_score += 15.0
+            volatility_details.append("BB Posición óptima (+15)")
+
+        # 5. ML Prediction (20 pts)
+        prediction_score = 0.0
+        prediction_details = []
         lr = self.predictor.linear_regression_predict(df['close'].values, forecast_periods=3)
         pattern = self.predictor.detect_candlestick_patterns(df)
         divergence = self.predictor.detect_divergence(df)
+
+        if lr['direction'] == 1 and lr['r_squared'] > 0.3:
+            pts = 10.0 * lr['r_squared']
+            prediction_score += pts
+            prediction_details.append(f"OLS Alcista R2={lr['r_squared']:.2f} (+{pts:.1f})")
+
+        if pattern['bias'] == 1:
+            pts = 5.0 * pattern['confidence']
+            prediction_score += pts
+            prediction_details.append(f"Patrón {pattern['pattern']} (+{pts:.1f})")
+
+        if divergence['type'] == 'BULLISH_DIVERGENCE':
+            pts = 5.0 * divergence['strength']
+            prediction_score += pts
+            prediction_details.append(f"Divergencia Alcista (+{pts:.1f})")
+
+        # 6. Regime Modifier (±10 pts)
         regime = self.predictor.compute_market_regime(df)
+        regime_score = 0.0
+        regime_details = []
+        if regime == "TRENDING_UP":
+            regime_score = 10.0
+            regime_details.append("Régimen Alcista (+10)")
+        elif regime == "TRENDING_DOWN":
+            regime_score = -10.0
+            regime_details.append("Régimen Bajista (-10)")
+
+        total_score = max(0.0, min(100.0, trend_score + momentum_score + volume_score + volatility_score + prediction_score + regime_score))
 
         return {
             "total_score": round(total_score, 1),
@@ -507,8 +301,10 @@ class StrategyService:
 
     def evaluate_market(self, df: pd.DataFrame, symbol: str, bot_run_id: str) -> Optional[Signal]:
         """
-        Evaluates market using multi-factor scoring + ML prediction.
-        Entry requires score >= 60 with prediction confirmation.
+        Evaluates market using Quant Model:
+        1. Calibrated Probability Prediction
+        2. Expected Net Value EV_net Calculation
+        3. Strict Risk & Liquidity Filters
         """
         if df.empty or len(df) < 30:
             return None
@@ -529,10 +325,17 @@ class StrategyService:
         bb_middle = float(latest.get('bb_middle', close_price))
         bearish_cross = bool(latest.get('bearish_cross', False))
 
-        # Compute composite score
+        # Compute multi-factor components
         score_data = self.compute_composite_score(df)
         total_score = score_data['total_score']
         ml = score_data['ml_prediction']
+
+        # Quantitative Probability Calibration
+        raw_prob = (total_score / 100.0) * 0.85 + 0.10
+        calibrated_prob = min(0.95, max(0.05, raw_prob))
+
+        # Net Expected Value calculation
+        ev_net = (calibrated_prob * self.tp_target) - ((1.0 - calibrated_prob) * self.sl_target) - self.total_cost
 
         # Check existing position
         position = PaperPosition.query.filter_by(symbol=symbol, is_open=True).first()
@@ -547,7 +350,7 @@ class StrategyService:
         indicators_json_str = json.dumps(score_data['indicators'])
 
         # ==========================================
-        # EXIT LONG LOGIC (check first)
+        # EXIT LONG LOGIC
         # ==========================================
         if position:
             should_exit = False
@@ -571,7 +374,7 @@ class StrategyService:
 
             if ml['candle_pattern'] in ('BEARISH_ENGULFING', 'EVENING_STAR') and ml['candle_confidence'] > 0.7:
                 should_exit = True
-                exit_reasons.append(f"Patron {ml['candle_pattern']}")
+                exit_reasons.append(f"Patrón {ml['candle_pattern']}")
 
             if ml['lr_direction'] == -1 and ml['lr_r_squared'] > 0.5:
                 should_exit = True
@@ -579,10 +382,9 @@ class StrategyService:
 
             if should_exit and exit_reasons:
                 reason = (
-                    f"EXIT ML: {' + '.join(exit_reasons)} | "
-                    f"Score={total_score:.0f} T={score_data['trend_score']:.0f} M={score_data['momentum_score']:.0f} "
-                    f"V={score_data['volume_score']:.0f} Vol={score_data['volatility_score']:.0f} "
-                    f"Pred={score_data['prediction_score']:.0f} Reg={score_data['regime_score']:.0f}"
+                    f"EXIT QUANT: {' + '.join(exit_reasons)} | "
+                    f"P(Y=1)={calibrated_prob:.2f} EV_Net={ev_net*100:+.2f}% | "
+                    f"Score={total_score:.0f}"
                 )
                 signal = Signal(
                     id=generate_uuid(), bot_run_id=bot_run_id, symbol=symbol,
@@ -595,42 +397,29 @@ class StrategyService:
                 return signal
 
         # ==========================================
-        # ENTRY LONG LOGIC
+        # ENTRY LONG LOGIC (Quant Net EV Rule)
         # ==========================================
         if not position:
-            # Multi-factor + ML entry conditions:
-            entry_conditions = [
-                total_score >= 60,                          # Composite score threshold
-                close_price > bb_middle,                    # Above BB middle
-                vol_ratio >= 0.8,                           # Reasonable volume
-                adx >= 18,                                  # Trend present
-                ml['lr_direction'] >= 0,                    # LR not bearish
-                ml['market_regime'] != 'TRENDING_DOWN',     # Not in downtrend
-            ]
-
-            # ML bonus: lower threshold if strong ML signals
-            ml_bonus = (
-                (ml['candle_bias'] == 1 and ml['candle_confidence'] > 0.7) or
-                (ml['divergence_type'] == 'BULLISH_DIVERGENCE') or
-                (ml['lr_direction'] == 1 and ml['lr_r_squared'] > 0.5)
+            should_enter = (
+                calibrated_prob >= 0.60 and           # Calibrated Probability threshold
+                ev_net >= 0.0015 and                  # Positive Net EV >= +0.15% after costs
+                close_price > bb_middle and           # Trend baseline
+                vol_ratio >= 0.8 and                  # Liquidity filter
+                adx >= 18 and                         # Non-choppy regime
+                ml['lr_direction'] >= 0 and           # Linear regression slope not negative
+                ml['market_regime'] != 'TRENDING_DOWN'# Downtrend filter
             )
 
-            if ml_bonus and total_score >= 50:
-                entry_conditions[0] = True  # Allow entry at lower score with ML confirmation
-
-            if all(entry_conditions):
+            if should_enter:
                 reason = (
-                    f"ENTRY ML Score={total_score:.0f}/100 | "
-                    f"T={score_data['trend_score']:.0f} M={score_data['momentum_score']:.0f} "
-                    f"V={score_data['volume_score']:.0f} Vol={score_data['volatility_score']:.0f} "
-                    f"Pred={score_data['prediction_score']:.0f} Reg={score_data['regime_score']:.0f} | "
-                    f"LR(R2={ml['lr_r_squared']:.2f},pred=${ml['lr_predicted_price']:.2f}) "
-                    f"Pattern={ml['candle_pattern']} Regime={ml['market_regime']} "
-                    f"RSI={rsi:.0f} ADX={adx:.0f}"
+                    f"ENTRY QUANT (Net EV={ev_net*100:+.2f}%): P(Y=1)={calibrated_prob:.2f} | "
+                    f"Score={total_score:.0f} ADX={adx:.1f} VolRatio={vol_ratio:.2f} | "
+                    f"Regimen={ml['market_regime']}"
                 )
+
                 signal = Signal(
                     id=generate_uuid(), bot_run_id=bot_run_id, symbol=symbol,
-                    type='BUY', action='ENTER_LONG', price=close_price,
+                    type='BUY', action='ENTRY_LONG', price=close_price,
                     reason=reason, indicators_json=indicators_json_str,
                     status='PENDING', timestamp=utc_now()
                 )
