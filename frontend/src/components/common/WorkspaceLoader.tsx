@@ -1,14 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Terminal, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 interface WorkspaceLoaderProps {
   targetPath: string;
   targetName: string;
   targetDesc: string;
-  onComplete?: () => void;
 }
 
 export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
@@ -18,33 +16,30 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
 }) => {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState('Inicializando sistema...');
-  const router = useRouter();
 
   useEffect(() => {
     const steps = [
-      { p: 15, text: 'Cargando protocolo de seguridad y autenticación...' },
-      { p: 35, text: 'Conectando a base de datos de datos de mercado...' },
-      { p: 65, text: `Cargando entorno táctico: ${targetName}...` },
-      { p: 85, text: 'Verificando modelos de inteligencia artificial y parámetros...' },
+      { p: 20, text: 'Cargando protocolo de seguridad y autenticación...' },
+      { p: 45, text: 'Conectando a base de datos de mercado TiDB Cloud...' },
+      { p: 75, text: `Cargando entorno táctico: ${targetName}...` },
+      { p: 90, text: 'Verificando modelos predictivos y parámetros...' },
       { p: 100, text: '¡Entorno listo! Redirigiendo...' }
     ];
 
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      if (currentStep < steps.length) {
-        setProgress(steps[currentStep].p);
-        setStatusText(steps[currentStep].text);
-        currentStep++;
+    let stepIndex = 0;
+    const timer = setInterval(() => {
+      if (stepIndex < steps.length) {
+        setProgress(steps[stepIndex].p);
+        setStatusText(steps[stepIndex].text);
+        stepIndex++;
       } else {
-        clearInterval(interval);
-        setTimeout(() => {
-          router.push(targetPath);
-        }, 300);
+        clearInterval(timer);
+        window.location.href = targetPath;
       }
-    }, 400);
+    }, 250);
 
-    return () => clearInterval(interval);
-  }, [targetPath, targetName, router]);
+    return () => clearInterval(timer);
+  }, [targetPath, targetName]);
 
   return (
     <div className="fixed inset-0 bg-[#008080] z-50 flex items-center justify-center p-4 font-sans text-black">
@@ -72,7 +67,7 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
             {/* Win95 Progress Bar */}
             <div className="w-full bg-white h-5 win95-inset p-0.5 flex overflow-hidden">
               <div
-                className="bg-[#000080] h-full transition-all duration-300 flex items-center justify-end pr-1 text-[10px] text-white font-mono font-bold"
+                className="bg-[#000080] h-full transition-all duration-200 flex items-center justify-end pr-1 text-[10px] text-white font-mono font-bold"
                 style={{ width: `${progress}%` }}
               >
                 {progress > 10 && `${progress}%`}
@@ -82,10 +77,10 @@ export const WorkspaceLoader: React.FC<WorkspaceLoaderProps> = ({
 
           <div className="win95-inset bg-black p-2 font-mono text-[11px] text-[#00ff00] h-20 overflow-y-auto space-y-0.5">
             <div>[SYS_BOOT] Verificando integridad de memoria... OK</div>
-            <div>[NET_INIT] Estableciendo conexión segura TiDB Cloud... OK</div>
-            {progress >= 35 && <div>[API_SYNC] Sincronizando feeds de datos de mercado... OK</div>}
-            {progress >= 65 && <div>[WORKSP_LOAD] Entorno táctico configurado... OK</div>}
-            {progress >= 85 && <div>[READY] Redirigiendo a workspace seleccionado...</div>}
+            <div>[NET_INIT] Conexión segura TiDB Cloud... OK</div>
+            {progress >= 45 && <div>[API_SYNC] Sincronizando datos de mercado... OK</div>}
+            {progress >= 75 && <div>[WORKSP_LOAD] Entorno táctico configurado... OK</div>}
+            {progress >= 90 && <div>[READY] Redirigiendo a workspace seleccionado...</div>}
           </div>
         </div>
       </div>
