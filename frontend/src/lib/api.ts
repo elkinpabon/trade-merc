@@ -118,20 +118,41 @@ export const api = {
     fetcher<{ symbol: string; last: number; high: number; low: number; volume: number; change_pct: number }>(
       `/market/ticker?symbol=${encodeURIComponent(symbol)}`
     ),
-  getMarketScanner: () =>
-    fetcher<{ total_markets: number; markets: any[] }>('/market/scanner'),
-  getSignals: (limit: number = 50) => fetcher<SignalData[]>(`/signals?limit=${limit}`),
-  getOrders: (limit: number = 50) => fetcher<PaperOrderData[]>(`/orders?limit=${limit}`),
-  getFills: (limit: number = 50) => fetcher<PaperFillData[]>(`/fills?limit=${limit}`),
-  getTrades: (limit: number = 50) => fetcher<TradeData[]>(`/trades?limit=${limit}`),
+  getSignals: () => fetcher<SignalData[]>('/signals'),
+  getOrders: () => fetcher<PaperOrderData[]>('/orders'),
+  getFills: () => fetcher<PaperFillData[]>('/fills'),
   getPositions: () => fetcher<PaperPositionData[]>('/positions'),
-  getAnalytics: () => fetcher<any>('/analytics/overview'),
-  getLogs: (limit: number = 100, level?: string) =>
-    fetcher<BotLogData[]>(`/logs?limit=${limit}${level ? `&level=${level}` : ''}`),
+  getTrades: (limit?: number) => fetcher<TradeData[]>(`/trades${limit ? `?limit=${limit}` : ''}`),
+  getLogs: (limit?: number) => fetcher<BotLogData[]>(`/logs${limit ? `?limit=${limit}` : ''}`),
   getLiveLogs: () => fetcher<{ logs: any[] }>('/bot/live-logs'),
+  getMarketScanner: () => fetcher<{ total_markets: number; markets: any[] }>('/market/scanner'),
+  getAnalyticsOverview: () => fetcher<any>('/analytics/overview'),
+  getAnalytics: () => fetcher<any>('/analytics/overview'),
   getExchangeSettings: () => fetcher<any>('/exchange/settings'),
   updateExchangeSettings: (data: any) =>
-    fetcher<any>('/exchange/settings', { method: 'PUT', body: JSON.stringify(data) }),
-  testExchangeConnection: (data: any) =>
-    fetcher<any>('/exchange/test-connection', { method: 'POST', body: JSON.stringify(data) }),
+    fetcher<{ success: boolean; message: string }>('/exchange/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  testExchangeConnection: (data?: any) =>
+    fetcher<{ success: boolean; message: string }>('/exchange/test-connection', {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    }),
+
+  // Polymarket API Suite
+  getPolymarketMarkets: (category: string = 'ALL') =>
+    fetcher<{ total: number; markets: any[] }>(`/polymarket/markets?category=${encodeURIComponent(category)}`),
+  getPolymarketSignals: () => fetcher<any[]>('/polymarket/signals'),
+  getPolymarketPositions: () => fetcher<any[]>('/polymarket/positions'),
+  buyPolymarketContract: (question: string, outcome: string, contract_price: number, cost: number) =>
+    fetcher<{ success: boolean; message: string }>('/polymarket/positions', {
+      method: 'POST',
+      body: JSON.stringify({ question, outcome, contract_price, cost })
+    }),
+  getPolymarketLiveLogs: () => fetcher<{ logs: any[] }>('/polymarket/bot/logs'),
+  getPolymarketBotStatus: () => fetcher<{ is_running: boolean; mode: string }>('/polymarket/bot/status'),
+  startPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/start', { method: 'POST' }),
+  stopPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/stop', { method: 'POST' }),
+  getPolymarketAnalytics: () => fetcher<any>('/polymarket/analytics'),
 };
