@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Lock, User, KeyRound, TrendingUp, Zap } from 'lucide-react';
+import { Lock, User, KeyRound, TrendingUp, Zap, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -45,7 +45,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#008080] flex items-center justify-center p-4 font-sans text-black">
-      <div className="win95-window w-full max-w-md p-2">
+      <div className="win95-window w-full max-w-lg p-2">
         {/* Title Bar */}
         <div className="win95-titlebar mb-3">
           <div className="flex items-center gap-2">
@@ -107,7 +107,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="win95-button w-full py-2 text-xs font-bold font-mono bg-[#008000] text-white"
+                    className="win95-button w-full py-2 text-xs font-bold font-mono bg-[#008000] text-white hover:bg-[#009900]"
                   >
                     {loading ? 'AUTENTICANDO...' : 'INICIAR SESIÓN'}
                   </button>
@@ -117,37 +117,62 @@ export default function LoginPage() {
           ) : (
             <div className="space-y-4">
               <div className="win95-inset bg-white p-3 text-center space-y-1">
-                <div className="font-bold text-sm font-mono text-[#008000]">¡AUTENTICACIÓN EXITOSA!</div>
+                <div className="font-bold text-sm font-mono text-[#008000]">AUTENTICACIÓN EXITOSA</div>
                 <div className="text-xs text-[#808080] font-mono">Selecciona el módulo de trading al que deseas ingresar:</div>
               </div>
 
-              <div className="space-y-3">
+              {/* Side-by-side Square Buttons Container */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Crypto Bot Square Button */}
                 <button
                   onClick={() => selectMode('/')}
-                  className="win95-button w-full py-3 px-4 text-left font-mono bg-[#000080] text-white flex items-center justify-between group hover:bg-[#0000a0]"
+                  className="win95-button aspect-square p-4 font-mono bg-[#000080] text-white flex flex-col items-center justify-between text-center group cursor-pointer hover:bg-[#0000a0] transition-all border-2 border-white/20"
                 >
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-yellow-300" />
-                    <div>
-                      <div className="font-bold text-xs">TRADEMERC CRYPTO BOT</div>
-                      <div className="text-[10px] text-slate-300">Trading Algorítmico Binance · 10 Indicadores + ML</div>
+                  <div className="w-12 h-12 rounded-full bg-yellow-400/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Zap className="h-7 w-7 text-yellow-400" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs leading-snug text-white group-hover:text-yellow-300">
+                      TRADEMERC CRYPTO BOT
+                    </div>
+                    <div className="text-[10px] text-slate-200 leading-tight">
+                      Trading Algorítmico Binance
+                      <br />
+                      10 Indicadores + ML
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-yellow-300">ENTRAR ➔</span>
+
+                  <div className="w-full py-1.5 px-2 bg-yellow-400 text-black font-bold text-[11px] flex items-center justify-center gap-1 group-hover:bg-yellow-300 transition-colors">
+                    <span>ENTRAR</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </div>
                 </button>
 
+                {/* Polymarket Bot Square Button */}
                 <button
                   onClick={() => selectMode('/polymarket')}
-                  className="win95-button w-full py-3 px-4 text-left font-mono bg-[#008080] text-white flex items-center justify-between group hover:bg-[#009090]"
+                  className="win95-button aspect-square p-4 font-mono bg-[#008080] text-white flex flex-col items-center justify-between text-center group cursor-pointer hover:bg-[#009090] transition-all border-2 border-white/20"
                 >
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-emerald-300" />
-                    <div>
-                      <div className="font-bold text-xs">TRADEMERC POLYMARKET BOT</div>
-                      <div className="text-[10px] text-slate-200">Mercados de Predicción Descentralizada · Ventaja +EV</div>
+                  <div className="w-12 h-12 rounded-full bg-emerald-300/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <TrendingUp className="h-7 w-7 text-emerald-300" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="font-bold text-xs leading-snug text-white group-hover:text-emerald-200">
+                      TRADEMERC POLYMARKET BOT
+                    </div>
+                    <div className="text-[10px] text-slate-100 leading-tight">
+                      Mercados de Predicción
+                      <br />
+                      Ventaja +EV & Kelly
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-emerald-300">ENTRAR ➔</span>
+
+                  <div className="w-full py-1.5 px-2 bg-emerald-300 text-black font-bold text-[11px] flex items-center justify-center gap-1 group-hover:bg-emerald-200 transition-colors">
+                    <span>ENTRAR</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </div>
                 </button>
               </div>
             </div>
