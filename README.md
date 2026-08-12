@@ -1,121 +1,73 @@
-# TradeMerc - Algorithmic Crypto Paper Trading Platform
+# TRADEMERC - Plataforma de Trading Cripto ML & Predicción en Polymarket
 
-TradeMerc is a production-grade algorithmic cryptocurrency paper trading platform. It ingests **real-time public market data via CCXT**, calculates technical indicators, evaluates quantitative strategy signals, enforces strict risk management rules, simulates realistic order execution (with fees, slippage, min notional, and quantity/price precision), persists all operational state in **MySQL**, and broadcasts live telemetry to a Next.js terminal dashboard via **Flask-SocketIO**.
+TRADEMERC es una plataforma de trading algorítmico y predicción cuantitativa de grado de producción. Cuenta con dos módulos tácticos completamente independientes:
+
+1. **Módulo Crypto Spot Bot (Binance)**: Ingesta de datos de mercado en tiempo real, 10 indicadores técnicos (EMA, RSI, MACD, Bollinger Bands, ATR, ADX, StochRSI, OBV, VWAP, Volume Profile), motor de predicción ML con regresión lineal OLS y reconocimiento de patrones de velas japonesas.
+2. **Módulo Polymarket Bot (+EV Prediction Engine)**: Ingesta de eventos en tiempo real desde la API Gamma de Polymarket, cálculo de Valor Esperado (+EV), gestión de riesgo con Criterio de Kelly y compra simulación de contratos YES/NO.
 
 ---
 
-## System Architecture
+## 🛠️ Arquitectura del Sistema
 
 ```mermaid
 graph TD
-    PublicExchange[Public CCXT Exchange API] -->|OHLCV / Ticker| MarketService[Market Data Ingestion Service]
-    MarketService -->|Candles & Rules| MySQL[(MySQL Database - trademerc_db)]
-    MarketService --> StrategyEngine[Strategy Engine: EMA Crossover + RSI]
-    StrategyEngine -->|Signals| RiskEngine[Risk Management Engine]
-    RiskEngine -->|Check Sizing & SL/TP| ExecutionEngine[BaseExecutionEngine]
-    
-    ExecutionEngine -->|Paper Mode| PaperEngine[PaperExecutionEngine]
-    ExecutionEngine -->|Live Mode - Safety Locked| LiveEngine[LiveExecutionEngine]
-    
-    PaperEngine -->|Orders, Fills, Positions| PortfolioService[Portfolio & PnL Engine]
-    PortfolioService --> MySQL
-    
-    WorkerThread[Bot Runner Loop - bot_runner.py] -->|Decoupled Execution| MarketService
-    WorkerThread -->|Broadcast Events| SocketGateway[Flask-SocketIO Gateway]
-    
-    SocketGateway -->|Real-time WebSockets| NextFrontend[Next.js Terminal Frontend]
-    NextFrontend -->|REST Control Plane| FlaskAPI[Flask REST API /api]
+    subgraph "Módulo Crypto Spot (Binance)"
+        BinanceAPI[Binance REST API] -->|Tickers & Velas| CryptoEngine[Motor Multi-Factor & Predicción ML]
+        CryptoEngine -->|Análisis & Señales| TiDBCrypto[(Base de Datos TiDB Cloud)]
+    end
+
+    subgraph "Módulo Predicción (Polymarket)"
+        GammaAPI[Polymarket Gamma API] -->|Eventos & Probabilidades| PolyEngine[Motor de Valor Esperado +EV & Kelly]
+        PolyEngine -->|Desbalances & Contratos| TiDBPoly[(Base de Datos TiDB Cloud)]
+    end
+
+    subgraph "Interfaz Táctica & Vercel Cloud"
+        VercelServerless[Vercel Serverless Route Handlers /api] --> TiDBCrypto
+        VercelServerless --> TiDBPoly
+        VercelServerless --> UserUI[Panel Táctico Win95 /login, /, /polymarket]
+    end
 ```
 
 ---
 
-## Core Components
+## 🎯 Componentes Principales
 
-1. **API / Control Plane (`backend/app/routes/`)**: REST API endpoints for bot control, configuration, dashboard summaries, candles, orders, signals, analytics, and exchange credentials.
-2. **Bot Worker / Execution Loop (`backend/worker/bot_runner.py`)**: Autonomous daemon loop running independently from Flask HTTP request threads.
-3. **Execution Engine Abstraction (`backend/app/services/execution/`)**:
-   - `BaseExecutionEngine`: Common interface.
-   - `PaperExecutionEngine`: Fully functional simulation with min notional, quantity/price rounding, fee deduction, slippage, and PnL calculation.
-   - `LiveExecutionEngine`: Future-ready private CCXT execution engine, safety locked via `LIVE_TRADING_ENABLED=false` environment guards.
-4. **Risk Engine (`backend/app/services/risk_service.py`)**: Sizing calculation based on risk per trade %, automated Stop-Loss/Take-Profit triggers, circuit breaker on max drawdown (15%), position count limits.
-5. **Persistence Layer (`backend/app/models/` & `schema.sql`)**: Complete 19-table MySQL database schema with indexes, foreign keys, and UTC timestamps.
-6. **Realtime Gateway (`backend/app/sockets/events.py`)**: Flask-SocketIO event push for live terminal updates.
-7. **Frontend Terminal (`frontend/`)**: Modern Next.js 14 app with TradingView Lightweight Charts, Tailwind CSS dark theme, and interactive control panels.
-
----
-
-## Live Readiness Strategy (Zero-Downtime Live Transition)
-
-TradeMerc is architected to switch from Paper Mode to Live Mode with zero structural changes:
-1. `exchange_credentials` table securely stores encrypted API key, secret, and passphrase using local Fernet AES encryption (`backend/app/utils/encryption.py`).
-2. `BaseExecutionEngine` polymorphic interface allows swapping `PaperExecutionEngine` with `LiveExecutionEngine`.
-3. System guard: `LIVE_TRADING_ENABLED=false` is enforced globally in `.env` and `LiveExecutionEngine` raises explicit execution blocks unless explicitly enabled.
+1. **Plano de Control & API Serverless (`frontend/src/app/api/`)**: Endpoints en Vercel para control de bot, estatus, logs en vivo, tickers, órdenes, posiciones y analítica de rendimiento.
+2. **Motor de Predicción Machine Learning (`backend/app/services/strategy_service.py`)**:
+   - Proyección de precios con Regresión Lineal OLS a 3 velas futuras (R² fit score).
+   - Detección de patrones de velas japonesas (*Hammer, Engulfing, Doji, Morning Star, Evening Star, Three White Soldiers*).
+   - Divergencias de precio vs RSI.
+   - Clasificador adaptativo de régimen de mercado (*TRENDING_UP, TRENDING_DOWN, RANGING, VOLATILE*).
+3. **Motor de Valor Esperado Polymarket (`frontend/src/app/api/polymarket/`)**:
+   - Algoritmo de ventaja matemática $+EV \ge 8\%$.
+   - Dimensionamiento de posición mediante Criterio de Kelly.
+   - Categorías: Cripto, Macroeconomía, Política y Tecnología.
+4. **Base de Datos TiDB Cloud MySQL**: Conexión segura SSL para persistencia de logs, señales, posiciones y métricas de rendimiento.
+5. **Interfaz Táctica Win95 (`frontend/src/`)**: Panel de control retro con aislamiento 100% entre entornos, selector post-login con botones cuadrados y pantalla de carga con barra de progreso animada.
 
 ---
 
-## Installation & Running Locally (No Docker Required)
+## 🚀 Despliegue en la Nube 24/7 (Sin Costos)
 
-### Step 1: Database Setup (MySQL)
-1. Ensure MySQL Server is running locally on `localhost:3306`.
-2. Create the database and run the schema script:
-   ```bash
-   mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS trademerc_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-   mysql -u root -p trademerc_db < backend/schema.sql
-   ```
+- **Web & API Serverless**: Desplegado en **Vercel** en 👉 **[https://trade-merc.vercel.app](https://trade-merc.vercel.app)**
+- **Base de Datos**: Alojada en **TiDB Cloud MySQL**.
+- **Ejecución Automática**: Configurada con **GitHub Actions** (`.github/workflows/bot-worker.yml`) para operar gratis 24/7 en la nube sin necesidad de mantener computadoras encendidas.
 
-### Step 2: Backend Setup
-```bash
-cd backend
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-# source venv/bin/activate
+---
 
-pip install -r requirements.txt
-python run.py
-```
-*The backend server will run on `http://localhost:5000` and automatically start the background bot execution worker thread.*
+## 💻 Desarrollo Local
 
-### Step 3: Frontend Setup
+### Configuración del Frontend:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-*The frontend terminal will run on `http://localhost:3000`.*
+*La aplicación estará disponible en `http://localhost:3000`.*
 
----
-
-## Project Structure
-
-```
-trade-merc/
-├── backend/
-│   ├── app/
-│   │   ├── models/           # 19 SQLAlchemy models
-│   │   ├── repositories/     # Data query repositories
-│   │   ├── routes/           # REST API blueprints
-│   │   ├── services/         # Domain services & execution engines
-│   │   │   └── execution/    # Base, Paper, and Live execution engines
-│   │   ├── sockets/          # Flask-SocketIO event gateway
-│   │   ├── utils/            # AES Encryption, helper functions
-│   │   └── config.py         # Config loader
-│   ├── worker/               # Decoupled bot execution loop
-│   ├── schema.sql            # MySQL schema initialization script
-│   ├── requirements.txt      # Python dependencies
-│   ├── run.py                # Server & worker launcher
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── app/              # Next.js App Router pages
-│   │   ├── components/       # Layout, Navbar, Sidebar, StatCards, Charts
-│   │   ├── features/         # Dashboard, Market, Bot Control, Exchange, Trades, Analytics, Logs
-│   │   ├── hooks/            # Socket.IO hooks
-│   │   ├── lib/              # API client and Socket singleton
-│   │   └── types/            # TypeScript definitions
-│   ├── package.json
-│   ├── tailwind.config.ts
-│   └── .env.local.example
-└── README.md
+### Configuración del Backend (Opcional):
+```bash
+cd backend
+pip install -r requirements.txt
+python run.py
 ```

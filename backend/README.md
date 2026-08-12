@@ -1,28 +1,34 @@
-# TradeMerc Backend (Python / Flask / Flask-SocketIO / CCXT / MySQL)
+# TRADEMERC - Servidor Backend & Motor de Trading ML
 
-Production-grade Algorithmic Crypto Paper Trading Platform Backend.
+El servidor backend de TRADEMERC está desarrollado en Python (Flask, SQLAlchemy y PyMySQL) y proporciona el motor de cálculo cuantitativo para el análisis de mercados cripto y predicciones.
 
-## Features
-- **Public CCXT Market Ingestion**: Reads live Binance candles without API keys.
-- **Execution Engine Abstraction**: `PaperExecutionEngine` (active) and `LiveExecutionEngine` (inactive, safety locked).
-- **Technical Analysis Engine**: EMA Fast/Slow, RSI, Volume SMA, Crossovers.
-- **Risk Control Engine**: Position sizing, Stop Loss, Take Profit, Max Drawdown limits, Circuit Breakers.
-- **Persistance**: Full MySQL database model via SQLAlchemy and PyMySQL.
-- **Realtime Gateway**: Flask-SocketIO event push for live terminal monitoring.
+---
 
-## Environment Setup
-1. Install Python 3.10+
-2. Create and start a MySQL database named `trademerc_db` locally.
-3. Import `schema.sql` into MySQL:
-   ```bash
-   mysql -u root -p trademerc_db < schema.sql
-   ```
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-5. Copy `.env.example` to `.env` and adjust database credentials.
-6. Run server and background bot worker:
-   ```bash
-   python run.py
-   ```
+## 🛠️ Estructura del Backend
+
+```
+backend/
+├── app/
+│   ├── models/           # Modelos de base de datos SQLAlchemy
+│   ├── routes/           # Blueprints y endpoints API REST
+│   ├── services/         # Servicios de dominio y motores de cálculo
+│   │   ├── indicator_service.py   # 10 Indicadores técnicos (EMA, RSI, MACD, BB, ATR, ADX, StochRSI, OBV, VWAP)
+│   │   ├── strategy_service.py    # Motor de predicción ML (Regresión Lineal OLS + Patrones de Velas + Divergencias)
+│   │   ├── risk_service.py        # Gestión de riesgo (Stop Loss 2%, Take Profit 4%)
+│   │   └── portfolio_service.py   # Valoración de portafolio y PnL
+│   └── utils/            # Funciones auxiliares y encriptación Fernet AES
+├── worker/
+│   └── bot_runner.py     # Bucle ejecutor autónomo del bot
+└── run.py                # Punto de entrada principal del servidor Flask
+```
+
+---
+
+## ⚙️ Ejecución del Servidor Local
+
+```bash
+cd backend
+pip install -r requirements.txt
+python run.py
+```
+*El servidor Flask iniciará en `http://localhost:5000` y activará el hilo ejecutor del bot en segundo plano.*
