@@ -119,12 +119,14 @@ class EvaluationService:
             key = (candle.symbol, candle.timeframe)
             indexes.setdefault(key, {})[candle.timestamp] = len(grouped.setdefault(key, []))
             grouped[key].append(candle)
-        resolved = 0
+        updates = []
         for evaluation in evaluations:
             candle_list = grouped.get((evaluation.symbol, evaluation.timeframe), [])
             index = indexes.get((evaluation.symbol, evaluation.timeframe), {}).get(evaluation.decision_candle_ts)
             if index is None:
-                continue
+                index = next((i - 1 for i, candle in enumerate(candle_list) if candle.timestamp > evaluation.decision_candle_ts), None)
+                if index is None:
+                    continue
             future = candle_list[index + 1:index + 1 + evaluation.horizon_candles]
             if len(future) < evaluation.horizon_candles:
                 continue
@@ -138,15 +140,15 @@ class EvaluationService:
                 if candle.high >= evaluation.tp_price:
                     label, label_candle = 'TP_HIT', candle
                     break
-            evaluation.label_status = 'RESOLVED'
-            evaluation.label = label
-            evaluation.label_candle_ts = label_candle.timestamp
-            evaluation.label_at = label_candle.datetime
-            evaluation.time_to_label_candles = future.index(label_candle) + 1
-            evaluation.max_favorable_excursion_pct = mfe
-            evaluation.max_adverse_excursion_pct = mae
-            evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0
-            resolved += 1
-        if resolved:
+            updates.append({
+                'id': evaluation.id, 'label_status': 'RESOLVED', 'label': label,
+                'label_candle_ts': label_candle.timestamp, 'label_at': label_candle.datetime,
+                'time_to_label_candles': future.index(label_candle) + 1,
+                'max_favorable_excursion_pct': mfe, 'max_adverse_excursion_pct': mae,
+                'realized_return_pct': ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0,
+                'updated_at': utc_now(),
+            })
+        if updates:
+            db.session.bulk_update_mappings(StrategyEvaluation, updates)
             db.session.commit()
-        return resolved
+        return len(updates)

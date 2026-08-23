@@ -126,7 +126,7 @@ class PaperTradingTestCase(unittest.TestCase):
                                   datetime=utc_now(), open=100, high=105, low=99, close=104, volume=1))
         db.session.commit()
 
-        resolved = EvaluationService.resolve_pending()
+        resolved = EvaluationService._resolve_batch([evaluation])
         labeled = db.session.get(StrategyEvaluation, evaluation.id)
 
         self.assertEqual(resolved, 1)
