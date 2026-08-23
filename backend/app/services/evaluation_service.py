@@ -74,7 +74,7 @@ class EvaluationService:
     @classmethod
     def resolve_pending(cls, limit: int = 200) -> int:
         evaluations = StrategyEvaluation.query.filter_by(label_status='PENDING').order_by(StrategyEvaluation.decision_candle_ts.asc()).limit(limit).all()
-        if len(evaluations) > 1000:
+        if evaluations:
             return cls._resolve_batch(evaluations)
         resolved = 0
         for evaluation in evaluations:
