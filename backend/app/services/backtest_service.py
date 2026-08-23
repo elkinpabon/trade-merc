@@ -64,7 +64,6 @@ class BacktestService:
                                   entry_at=evaluation.decision_at, exit_at=evaluation.label_at,
                                   entry_price=entry, exit_price=exit_price, quantity=quantity,
                                   realized_pnl=pnl, total_fee=entry_fee + exit_fee, exit_reason=reason)
-            db.session.add(trade)
             trades.append(trade)
             open_until[evaluation.symbol] = evaluation.label_candle_ts
         winners = [trade for trade in trades if trade.realized_pnl > 0]
@@ -76,5 +75,7 @@ class BacktestService:
         result.profit_factor = sum(t.realized_pnl for t in winners) / abs(sum(t.realized_pnl for t in losers)) if losers else 0.0
         result.result_json = json.dumps({'expectancy': sum(t.realized_pnl for t in trades) / len(trades) if trades else 0.0})
         run.status, run.finished_at = 'COMPLETED', utc_now()
+        if trades:
+            db.session.bulk_save_objects(trades)
         db.session.commit()
         return result
