@@ -32,6 +32,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
         LogService.log("INFO", "BotRunner", "Motor Multi-Factor avanzado inicializado: EMA+RSI+MACD+BB+ATR+ADX+StochRSI+OBV+VWAP")
 
     completed_cycles = 0
+    last_cycle_succeeded = False
     while max_cycles is None or completed_cycles < max_cycles:
         polling_interval = 1
         with app.app_context():
@@ -68,6 +69,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 all_tickers = market_svc.fetch_all_tickers(symbols)
 
                 if all_tickers:
+                    last_cycle_succeeded = True
                     # 2. RUN MULTI-MARKET ANOMALY & PATTERN SCANNER
                     scanned_markets = ScannerService.scan_tickers(all_tickers)
                     
@@ -202,7 +204,10 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                         portfolio_svc.update_valuation(symbol_prices)
                         broadcast_event('portfolio_updated', portfolio_svc.get_summary())
 
-                HealthService.update_component_health("bot_worker", "HEALTHY", f"Motor Multi-Factor escaneando {len(symbols)} pares con 10 indicadores.")
+                if all_tickers:
+                    HealthService.update_component_health("bot_worker", "HEALTHY", f"Motor Multi-Factor escaneando {len(symbols)} pares con 10 indicadores.")
+                else:
+                    HealthService.update_component_health("bot_worker", "DEGRADED", "No public market data received during this cycle.")
 
             except Exception as e:
                 print(f"Error in bot loop: {e}")
@@ -212,3 +217,5 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
         completed_cycles += 1
         if max_cycles is None:
             time.sleep(polling_interval)
+
+    return last_cycle_succeeded

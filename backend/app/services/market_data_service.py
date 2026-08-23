@@ -1,4 +1,5 @@
 import ccxt
+import json
 import requests
 import pandas as pd
 from datetime import datetime, timezone
@@ -21,36 +22,55 @@ class MarketDataService:
         })
 
     def fetch_all_tickers(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Batch fetches real-time tickers for symbols in a single call."""
+        """Batch fetches public Binance tickers without loading exchange metadata."""
         try:
-            raw_tickers = self.client.fetch_tickers(symbols)
+            requested = {symbol.replace('/', '').upper(): symbol for symbol in symbols}
+            response = requests.get(
+                'https://data-api.binance.vision/api/v3/ticker/24hr',
+                params={'symbols': json.dumps(list(requested), separators=(',', ':'))}, timeout=5,
+                headers={'User-Agent': 'TRADEMERC-paper-bot/1.0'},
+            )
+            response.raise_for_status()
             parsed_tickers = {}
-            
-            for sym, t in raw_tickers.items():
-                if not t:
+            for ticker in response.json():
+                symbol = requested.get(ticker.get('symbol', ''))
+                if not symbol:
                     continue
-                last_price = float(t.get('last') or t.get('close') or 0.0)
-                change_pct = float(t.get('percentage') or 0.0)
-                vol = float(t.get('baseVolume') or 0.0)
-                quote_vol = float(t.get('quoteVolume') or 0.0)
-                high = float(t.get('high') or last_price)
-                low = float(t.get('low') or last_price)
-                
-                parsed_tickers[sym] = {
-                    "symbol": sym,
-                    "last": last_price,
-                    "bid": float(t.get('bid') or last_price),
-                    "ask": float(t.get('ask') or last_price),
-                    "high": high,
-                    "low": low,
-                    "volume": vol,
-                    "quote_volume": quote_vol,
-                    "change_pct": change_pct,
-                    "timestamp": int(t.get('timestamp') or 0)
+                last_price = float(ticker.get('lastPrice') or 0.0)
+                parsed_tickers[symbol] = {
+                    'symbol': symbol,
+                    'last': last_price,
+                    'bid': float(ticker.get('bidPrice') or last_price),
+                    'ask': float(ticker.get('askPrice') or last_price),
+                    'high': float(ticker.get('highPrice') or last_price),
+                    'low': float(ticker.get('lowPrice') or last_price),
+                    'volume': float(ticker.get('volume') or 0.0),
+                    'quote_volume': float(ticker.get('quoteVolume') or 0.0),
+                    'change_pct': float(ticker.get('priceChangePercent') or 0.0),
+                    'timestamp': int(ticker.get('closeTime') or 0),
                 }
             return parsed_tickers
-        except Exception as e:
-            print(f"Warning: Batch ticker fetch failed: {e}")
+        except Exception as direct_error:
+            print(f"Warning: Binance data API ticker fetch failed: {direct_error}")
+        try:
+            raw_tickers = self.client.fetch_tickers(symbols)
+            return {
+                symbol: {
+                    'symbol': symbol,
+                    'last': float(ticker.get('last') or ticker.get('close') or 0.0),
+                    'bid': float(ticker.get('bid') or ticker.get('last') or 0.0),
+                    'ask': float(ticker.get('ask') or ticker.get('last') or 0.0),
+                    'high': float(ticker.get('high') or ticker.get('last') or 0.0),
+                    'low': float(ticker.get('low') or ticker.get('last') or 0.0),
+                    'volume': float(ticker.get('baseVolume') or 0.0),
+                    'quote_volume': float(ticker.get('quoteVolume') or 0.0),
+                    'change_pct': float(ticker.get('percentage') or 0.0),
+                    'timestamp': int(ticker.get('timestamp') or 0),
+                }
+                for symbol, ticker in raw_tickers.items() if ticker
+            }
+        except Exception as ccxt_error:
+            print(f"Warning: Batch ticker fetch failed: {ccxt_error}")
             return {}
 
     def fetch_public_ohlcv(self, symbol: str, timeframe: str = '5m', limit: int = 100) -> List[Dict[str, Any]]:
@@ -62,7 +82,7 @@ class MarketDataService:
         if not clean_symbol.endswith('USDT'):
             clean_symbol = f"{clean_symbol}USDT"
 
-        url = f"https://api.binance.com/api/v3/klines?symbol={clean_symbol}&interval={timeframe}&limit={limit}"
+        url = f"https://data-api.binance.vision/api/v3/klines?symbol={clean_symbol}&interval={timeframe}&limit={limit}"
 
         try:
             resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0"})

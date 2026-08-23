@@ -41,6 +41,7 @@ jobs:
           from worker.bot_runner import run_bot_loop
 
           print('Executing one automated paper-trading cycle...')
-          run_bot_loop(create_app(), max_cycles=1)
+          if not run_bot_loop(create_app(), max_cycles=1):
+              raise SystemExit('No public market data was received; failing the cycle.')
           print('Paper-trading cycle finished cleanly.')
           PY
