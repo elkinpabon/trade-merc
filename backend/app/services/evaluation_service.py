@@ -28,8 +28,8 @@ class EvaluationService:
 
     @classmethod
     def record(cls, config, bot_run_id: str, symbol: str, timeframe: str, latest, score_data: dict,
-               commit: bool = True, check_existing: bool = True) -> StrategyEvaluation:
-        model = ModelService.active_model()
+               commit: bool = True, check_existing: bool = True, model=None) -> StrategyEvaluation:
+        model = model or ModelService.active_model()
         if config.model_version_id != model.id:
             config.model_version_id = model.id
             db.session.commit()

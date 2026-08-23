@@ -73,7 +73,7 @@ class BackfillService:
                 score_data = strategy.compute_composite_score(frame.iloc[:index + 1])
                 EvaluationService.record(
                     config, None, symbol, config.timeframe, latest, score_data,
-                    commit=False, check_existing=False,
+                    commit=False, check_existing=False, model=model,
                 )
                 summary['evaluations'] += 1
                 if summary['evaluations'] % 500 == 0:
