@@ -136,7 +136,30 @@ class MarketDataService:
         candles = self.fetch_public_ohlcv(symbol, timeframe, limit)
         if not candles:
             return pd.DataFrame()
-        df = pd.DataFrame(candles)
+        # The final exchange candle is still forming and must never be used as a feature or label.
+        closed_candles = [{**candle, 'symbol': candle.get('symbol', symbol), 'timeframe': candle.get('timeframe', timeframe)} for candle in candles[:-1]]
+        self.persist_closed_candles(closed_candles)
+        df = pd.DataFrame(closed_candles)
+        if df.empty:
+            return df
         df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-        # Exchange responses include the current, mutable candle as the last row.
-        return df.iloc[:-1].copy() if len(df) > 1 else pd.DataFrame()
+        return df
+
+    @staticmethod
+    def persist_closed_candles(candles: List[Dict[str, Any]]) -> None:
+        """Upserts closed candles so research and labels use the same market data."""
+        if not candles:
+            return
+        for candle in candles:
+            existing = Candle.query.filter_by(
+                symbol=candle['symbol'], timeframe=candle['timeframe'], timestamp=candle['timestamp']
+            ).first()
+            if existing:
+                continue
+            candle_datetime = candle.get('datetime') or datetime.fromtimestamp(candle['timestamp'] / 1000.0, tz=timezone.utc).replace(tzinfo=None)
+            db.session.add(Candle(
+                symbol=candle['symbol'], timeframe=candle['timeframe'], timestamp=candle['timestamp'],
+                datetime=datetime.fromisoformat(candle_datetime) if isinstance(candle_datetime, str) else candle_datetime, open=candle['open'], high=candle['high'],
+                low=candle['low'], close=candle['close'], volume=candle['volume'],
+            ))
+        db.session.commit()

@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '*/5 * * * *'  # Runs every 5 minutes
   workflow_dispatch:        # Manual trigger button
+    inputs:
+      research_mode:
+        description: 'cycle, backfill, backtest o train'
+        required: false
+        default: 'cycle'
+      research_days:
+        description: 'Días para backfill o backtest (máximo 90/365)'
+        required: false
+        default: '30'
 
 jobs:
   run-bot-scan:
@@ -30,6 +39,8 @@ jobs:
           DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
           DB_PORT: '4000'
           DB_NAME: 'trademerc_db'
+          RESEARCH_MODE: ${{ inputs.research_mode || 'cycle' }}
+          RESEARCH_DAYS: ${{ inputs.research_days || '30' }}
         run: |
           python - <<'PY'
           import os
@@ -40,8 +51,14 @@ jobs:
           from app import create_app
           from worker.bot_runner import run_bot_loop
 
-          print('Executing one automated paper-trading cycle...')
-          if not run_bot_loop(create_app(), max_cycles=1):
-              raise SystemExit('No public market data was received; failing the cycle.')
-          print('Paper-trading cycle finished cleanly.')
+          mode = os.environ['RESEARCH_MODE']
+          if mode == 'cycle':
+              print('Executing one automated paper-trading cycle...')
+              if not run_bot_loop(create_app(), max_cycles=1):
+                  raise SystemExit('No public market data was received; failing the cycle.')
+              print('Paper-trading cycle finished cleanly.')
+          else:
+              from scripts.run_research import main
+              sys.argv = ['run_research.py', mode, '--days', os.environ['RESEARCH_DAYS']]
+              main()
           PY

@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     rejection_reason TEXT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_order_symbol (symbol)
 );
 
@@ -271,6 +272,8 @@ CREATE TABLE IF NOT EXISTS system_health (
     details TEXT NULL,
     last_check DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- Research tables are defined in migrations/002_research_learning.sql.
 
 -- Seed initial default config if empty
 INSERT INTO exchanges (id, name, is_active, supports_paper, supports_live) 

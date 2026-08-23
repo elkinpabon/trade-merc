@@ -7,6 +7,7 @@ class BotConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), default='Default EMA Strategy Bot')
     exchange_id = db.Column(db.String(64), default='binance')
+    model_version_id = db.Column(db.String(64), nullable=True)
     mode = db.Column(db.String(20), default='paper')
     symbols = db.Column(db.Text, default='BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,LINK/USDT,AVAX/USDT,LTC/USDT')
     timeframe = db.Column(db.String(10), default='15m')
@@ -32,6 +33,7 @@ class BotConfig(db.Model):
             "id": self.id,
             "name": self.name,
             "exchange_id": self.exchange_id,
+            "model_version_id": self.model_version_id,
             "mode": self.mode,
             "symbols": self.symbols.split(",") if self.symbols else [],
             "timeframe": self.timeframe,

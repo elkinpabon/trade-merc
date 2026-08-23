@@ -299,7 +299,8 @@ class StrategyService:
             }
         }
 
-    def evaluate_market(self, df: pd.DataFrame, symbol: str, bot_run_id: str) -> Optional[Signal]:
+    def evaluate_market(self, df: pd.DataFrame, symbol: str, bot_run_id: str, score_data: Optional[dict] = None,
+                        probability: Optional[float] = None) -> Optional[Signal]:
         """
         Evaluates market using Quant Model:
         1. Calibrated Probability Prediction
@@ -310,12 +311,13 @@ class StrategyService:
             return None
 
         # Apply full indicator suite
-        df = IndicatorService.apply_indicators(
-            df,
-            ema_fast=self.config.ema_fast_period,
-            ema_slow=self.config.ema_slow_period,
-            rsi_period=self.config.rsi_period
-        )
+        if score_data is None:
+            df = IndicatorService.apply_indicators(
+                df,
+                ema_fast=self.config.ema_fast_period,
+                ema_slow=self.config.ema_slow_period,
+                rsi_period=self.config.rsi_period
+            )
 
         latest = df.iloc[-1]
         close_price = float(latest['close'])
@@ -326,13 +328,13 @@ class StrategyService:
         bearish_cross = bool(latest.get('bearish_cross', False))
 
         # Compute multi-factor components
-        score_data = self.compute_composite_score(df)
+        score_data = score_data or self.compute_composite_score(df)
         total_score = score_data['total_score']
         ml = score_data['ml_prediction']
 
         # Quantitative Probability Calibration
         raw_prob = (total_score / 100.0) * 0.85 + 0.10
-        calibrated_prob = min(0.95, max(0.05, raw_prob))
+        calibrated_prob = probability if probability is not None else min(0.95, max(0.05, raw_prob))
 
         # Net Expected Value calculation
         ev_net = (calibrated_prob * self.tp_target) - ((1.0 - calibrated_prob) * self.sl_target) - self.total_cost

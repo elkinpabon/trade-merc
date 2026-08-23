@@ -4,7 +4,7 @@ import datetime as dt_module
 class Candle(db.Model):
     __tablename__ = 'candles'
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     symbol = db.Column(db.String(32), nullable=False)
     timeframe = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.BigInteger, nullable=False)

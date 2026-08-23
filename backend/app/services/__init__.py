@@ -10,6 +10,11 @@ from app.services.credentials_service import CredentialsService
 from app.services.log_service import LogService
 from app.services.health_service import HealthService
 from app.services.scanner_service import ScannerService
+from app.services.evaluation_service import EvaluationService
+from app.services.model_service import ModelService
+from app.services.research_metrics_service import ResearchMetricsService
+from app.services.backfill_service import BackfillService
+from app.services.backtest_service import BacktestService
 
 __all__ = [
     'MarketDataService',
@@ -24,4 +29,9 @@ __all__ = [
     'LogService',
     'HealthService',
     'ScannerService',
+    'EvaluationService',
+    'ModelService',
+    'ResearchMetricsService',
+    'BackfillService',
+    'BacktestService',
 ]

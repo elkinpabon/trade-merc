@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     simulated_slippage DECIMAL(18, 8) DEFAULT 0.0,
     rejection_reason TEXT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (signal_id) REFERENCES signals(id) ON DELETE SET NULL
 );
 
@@ -308,6 +309,9 @@ CREATE TABLE IF NOT EXISTS system_health (
     details TEXT NULL,
     last_check DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+-- 17. Research, learning and reproducible backtesting tables
+-- Apply migrations/002_research_learning.sql after this base schema.
 
 -- ==============================================================================
 -- END OF TIDB CLOUD SCHEMA

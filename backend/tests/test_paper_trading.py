@@ -6,10 +6,14 @@ os.environ['DATABASE_URL'] = 'sqlite://'
 from app import create_app
 from app.extensions import db
 from app.models import BotConfig, PaperFill, PaperOrder, PaperPosition, PortfolioSnapshot, Signal, Trade
+from app.models import Candle, StrategyEvaluation
+from app.services.evaluation_service import EvaluationService
+from app.services.backtest_service import BacktestService
 from app.services.execution.paper_execution_engine import PaperExecutionEngine
 from app.services.indicator_service import IndicatorService
 from app.services.market_data_service import MarketDataService
 from app.services.risk_service import RiskService
+from app.services.model_service import ModelService
 from app.utils.helpers import generate_uuid, utc_now
 
 
@@ -95,6 +99,64 @@ class PaperTradingTestCase(unittest.TestCase):
 
         self.assertEqual(len(candles), 1)
         self.assertEqual(candles.iloc[0]['close'], 1)
+
+    def test_baseline_model_probability_is_bounded(self):
+        model = ModelService.ensure_baseline()
+        probability = ModelService.predict({'score': 75}, model)
+
+        self.assertEqual(model.status, 'active')
+        self.assertGreaterEqual(probability, 0.05)
+        self.assertLessEqual(probability, 0.95)
+
+    def test_evaluation_is_labeled_from_future_closed_candles(self):
+        import pandas as pd
+
+        latest = pd.Series({'timestamp': 100, 'datetime': pd.Timestamp('2026-01-01T00:00:00'), 'close': 100.0,
+                            'bb_middle': 99.0, 'vol_ratio': 2.0, 'adx': 25.0})
+        score_data = {
+            'total_score': 80.0, 'trend_score': 20.0, 'momentum_score': 20.0, 'volume_score': 20.0,
+            'volatility_score': 10.0, 'prediction_score': 10.0, 'regime_score': 10.0,
+            'indicators': {'rsi': 55.0, 'adx': 25.0, 'macd_histogram': 1.0, 'vol_ratio': 2.0,
+                           'bullish_cross': False, 'bearish_cross': False},
+            'ml_prediction': {'lr_r_squared': 0.7, 'lr_slope_pct': 1.0, 'lr_direction': 1, 'market_regime': 'TRENDING_UP'},
+        }
+        evaluation = EvaluationService.record(self.config, 'run', 'BTC/USDT', '15m', latest, score_data)
+        for timestamp in range(101, 113):
+            db.session.add(Candle(symbol='BTC/USDT', timeframe='15m', timestamp=timestamp,
+                                  datetime=utc_now(), open=100, high=105, low=99, close=104, volume=1))
+        db.session.commit()
+
+        resolved = EvaluationService.resolve_pending()
+        labeled = db.session.get(StrategyEvaluation, evaluation.id)
+
+        self.assertEqual(resolved, 1)
+        self.assertEqual(labeled.label, 'TP_HIT')
+        self.assertEqual(labeled.label_status, 'RESOLVED')
+
+    def test_backtest_replays_resolved_entry(self):
+        import pandas as pd
+        from datetime import datetime
+
+        latest = pd.Series({'timestamp': 100, 'datetime': pd.Timestamp('2026-01-01T00:00:00'), 'close': 100.0,
+                            'bb_middle': 99.0, 'vol_ratio': 2.0, 'adx': 25.0})
+        score_data = {
+            'total_score': 80.0, 'trend_score': 20.0, 'momentum_score': 20.0, 'volume_score': 20.0,
+            'volatility_score': 10.0, 'prediction_score': 10.0, 'regime_score': 10.0,
+            'indicators': {'rsi': 55.0, 'adx': 25.0, 'macd_histogram': 1.0, 'vol_ratio': 2.0,
+                           'bullish_cross': False, 'bearish_cross': False},
+            'ml_prediction': {'lr_r_squared': 0.7, 'lr_slope_pct': 1.0, 'lr_direction': 1, 'market_regime': 'TRENDING_UP'},
+        }
+        EvaluationService.record(self.config, 'run', 'BTC/USDT', '15m', latest, score_data)
+        for timestamp in range(101, 113):
+            db.session.add(Candle(symbol='BTC/USDT', timeframe='15m', timestamp=timestamp,
+                                  datetime=utc_now(), open=100, high=105, low=99, close=104, volume=1))
+        db.session.commit()
+        EvaluationService.resolve_pending()
+
+        result = BacktestService.run(self.config, datetime(2025, 1, 1), datetime(2027, 1, 1))
+
+        self.assertEqual(result.total_trades, 1)
+        self.assertGreater(result.final_equity, self.config.virtual_balance)
 
 
 if __name__ == '__main__':

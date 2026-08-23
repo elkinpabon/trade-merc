@@ -15,6 +15,9 @@ from app.services import (
     HealthService,
     ScannerService,
     IndicatorService,
+    EvaluationService,
+    ModelService,
+    ResearchMetricsService,
 )
 from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
@@ -34,6 +37,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
     completed_cycles = 0
     last_cycle_succeeded = False
     while max_cycles is None or completed_cycles < max_cycles:
+        cycle_succeeded = False
         polling_interval = 1
         with app.app_context():
             try:
@@ -69,7 +73,6 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 all_tickers = market_svc.fetch_all_tickers(symbols)
 
                 if all_tickers:
-                    last_cycle_succeeded = True
                     # 2. RUN MULTI-MARKET ANOMALY & PATTERN SCANNER
                     scanned_markets = ScannerService.scan_tickers(all_tickers)
                     
@@ -82,8 +85,9 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
 
                     symbol_prices = {s: t['last'] for s, t in all_tickers.items() if t.get('last')}
 
-                    # 3. EVALUATE TOP CANDIDATE PAIRS & OPEN POSITIONS
-                    top_candidates = [m['symbol'] for m in scanned_markets[:5]]
+                    # Evaluate every configured liquid pair. The scanner only ranks the UI;
+                    # the research dataset needs both entered and rejected decisions.
+                    top_candidates = list(symbols)
                     
                     open_positions = PaperPosition.query.filter_by(is_open=True).all()
                     for p in open_positions:
@@ -163,9 +167,16 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             # Log to DB and Broadcast Real-time Log Event
                             LogService.log('INFO', 'BotScanner', log_msg)
 
-                            signal = strategy_svc.evaluate_market(df, symbol, active_run.id)
+                            evaluation = EvaluationService.record(
+                                config, active_run.id, symbol, timeframe, latest, score_data
+                            )
+                            signal = strategy_svc.evaluate_market(
+                                df, symbol, active_run.id, score_data=score_data,
+                                probability=evaluation.probability,
+                            )
 
                             if signal:
+                                EvaluationService.link_signal(evaluation, signal.id)
                                 broadcast_event('signal_created', signal.to_dict())
                                 LogService.log('INFO', 'StrategyEngine', f"Señal multi-factor: {signal.type} {symbol} a ${signal.price:.2f} (Score={total_score:.0f})")
 
@@ -202,19 +213,29 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
 
                     if symbol_prices:
                         portfolio_svc.update_valuation(symbol_prices)
+                        resolved = EvaluationService.resolve_pending()
+                        if resolved:
+                            LogService.log('INFO', 'LabelService', f"Etiquetas resueltas: {resolved}")
+                        ResearchMetricsService.update_paper_daily(config, active_run)
+                        trained = ModelService.train_if_due()
+                        if trained:
+                            LogService.log('INFO', 'ModelService', f"Modelo candidato creado: {trained.version}")
                         broadcast_event('portfolio_updated', portfolio_svc.get_summary())
 
                 if all_tickers:
+                    cycle_succeeded = True
                     HealthService.update_component_health("bot_worker", "HEALTHY", f"Motor Multi-Factor escaneando {len(symbols)} pares con 10 indicadores.")
                 else:
                     HealthService.update_component_health("bot_worker", "DEGRADED", "No public market data received during this cycle.")
 
             except Exception as e:
+                db.session.rollback()
                 print(f"Error in bot loop: {e}")
                 traceback.print_exc()
                 HealthService.update_component_health("bot_worker", "DEGRADED", str(e))
 
         completed_cycles += 1
+        last_cycle_succeeded = cycle_succeeded
         if max_cycles is None:
             time.sleep(polling_interval)
 

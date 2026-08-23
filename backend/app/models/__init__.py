@@ -9,6 +9,7 @@ from app.models.portfolio import PortfolioSnapshot
 from app.models.metrics import DailyMetric, StrategyMetric
 from app.models.logs import RiskEvent, BotLog, SystemHealth
 from app.models.user import User
+from app.models.research import ModelVersion, StrategyEvaluation, StrategyRun, BacktestRun, BacktestTrade, RunDailyMetric
 
 __all__ = [
     'Exchange',
@@ -31,4 +32,10 @@ __all__ = [
     'BotLog',
     'SystemHealth',
     'User',
+    'ModelVersion',
+    'StrategyEvaluation',
+    'StrategyRun',
+    'BacktestRun',
+    'BacktestTrade',
+    'RunDailyMetric',
 ]
