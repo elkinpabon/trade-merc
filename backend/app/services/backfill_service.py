@@ -71,7 +71,10 @@ class BackfillService:
                 if int(latest['timestamp']) in existing_evaluations:
                     continue
                 score_data = strategy.compute_composite_score(frame.iloc[:index + 1])
-                EvaluationService.record(config, None, symbol, config.timeframe, latest, score_data, commit=False)
+                EvaluationService.record(
+                    config, None, symbol, config.timeframe, latest, score_data,
+                    commit=False, check_existing=False,
+                )
                 summary['evaluations'] += 1
                 if summary['evaluations'] % 500 == 0:
                     db.session.commit()

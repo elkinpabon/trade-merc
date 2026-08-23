@@ -28,15 +28,16 @@ class EvaluationService:
 
     @classmethod
     def record(cls, config, bot_run_id: str, symbol: str, timeframe: str, latest, score_data: dict,
-               commit: bool = True) -> StrategyEvaluation:
+               commit: bool = True, check_existing: bool = True) -> StrategyEvaluation:
         model = ModelService.active_model()
         if config.model_version_id != model.id:
             config.model_version_id = model.id
             db.session.commit()
         candle_ts = int(latest['timestamp'])
-        existing = StrategyEvaluation.query.filter_by(symbol=symbol, timeframe=timeframe, decision_candle_ts=candle_ts, model_version_id=model.id).first()
-        if existing:
-            return existing
+        if check_existing:
+            existing = StrategyEvaluation.query.filter_by(symbol=symbol, timeframe=timeframe, decision_candle_ts=candle_ts, model_version_id=model.id).first()
+            if existing:
+                return existing
         features = cls.build_features(score_data)
         probability = ModelService.predict(features, model)
         price = float(latest['close'])
