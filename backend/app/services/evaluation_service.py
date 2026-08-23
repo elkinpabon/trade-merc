@@ -1,6 +1,8 @@
 import json
 from datetime import timedelta
 
+from sqlalchemy import text
+
 from app.extensions import db
 from app.models import Candle, StrategyEvaluation
 from app.services.model_service import ModelService
@@ -149,6 +151,44 @@ class EvaluationService:
                 'updated_at': utc_now(),
             })
         if updates:
-            db.session.bulk_update_mappings(StrategyEvaluation, updates)
+            if db.engine.dialect.name == 'mysql':
+                connection = db.session.connection()
+                connection.execute(text('''
+                    CREATE TEMPORARY TABLE evaluation_label_updates (
+                        id VARCHAR(64) PRIMARY KEY, label_status VARCHAR(20), label VARCHAR(20),
+                        label_candle_ts BIGINT, label_at DATETIME, time_to_label_candles INT,
+                        max_favorable_excursion_pct DOUBLE, max_adverse_excursion_pct DOUBLE,
+                        realized_return_pct DOUBLE, updated_at DATETIME
+                    )
+                '''))
+                columns = ('id', 'label_status', 'label', 'label_candle_ts', 'label_at', 'time_to_label_candles',
+                           'max_favorable_excursion_pct', 'max_adverse_excursion_pct', 'realized_return_pct', 'updated_at')
+                for offset in range(0, len(updates), 500):
+                    batch = updates[offset:offset + 500]
+                    params = {}
+                    values = []
+                    for row_index, update in enumerate(batch):
+                        names = []
+                        for column in columns:
+                            parameter = f'{column}_{row_index}'
+                            params[parameter] = update[column]
+                            names.append(f':{parameter}')
+                        values.append(f"({', '.join(names)})")
+                    connection.execute(text(f"INSERT INTO evaluation_label_updates ({', '.join(columns)}) VALUES {', '.join(values)}"), params)
+                connection.execute(text('''
+                    UPDATE strategy_evaluations evaluation
+                    INNER JOIN evaluation_label_updates update_row ON update_row.id = evaluation.id
+                    SET evaluation.label_status = update_row.label_status,
+                        evaluation.label = update_row.label,
+                        evaluation.label_candle_ts = update_row.label_candle_ts,
+                        evaluation.label_at = update_row.label_at,
+                        evaluation.time_to_label_candles = update_row.time_to_label_candles,
+                        evaluation.max_favorable_excursion_pct = update_row.max_favorable_excursion_pct,
+                        evaluation.max_adverse_excursion_pct = update_row.max_adverse_excursion_pct,
+                        evaluation.realized_return_pct = update_row.realized_return_pct,
+                        evaluation.updated_at = update_row.updated_at
+                '''))
+            else:
+                db.session.bulk_update_mappings(StrategyEvaluation, updates)
             db.session.commit()
         return len(updates)
