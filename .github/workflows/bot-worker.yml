@@ -12,7 +12,7 @@ on:
       research_days:
         description: 'Días para backfill o backtest (máximo 90/365)'
         required: false
-      default: '30'
+        default: '30'
 
 concurrency:
   group: trademerc-paper-research
