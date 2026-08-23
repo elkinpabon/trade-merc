@@ -211,6 +211,8 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     unrealized_pnl_pct DECIMAL(10, 4) DEFAULT 0.0,
     stop_loss_price DECIMAL(18, 8) NULL,
     take_profit_price DECIMAL(18, 8) NULL,
+    entry_order_id VARCHAR(64) NULL,
+    entry_fee_amount DECIMAL(18, 8) NOT NULL DEFAULT 0,
     is_open BOOLEAN DEFAULT TRUE,
     opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

@@ -64,7 +64,7 @@ class PortfolioService:
         for p in open_positions:
             if p.symbol in symbol_prices:
                 p.current_price = symbol_prices[p.symbol]
-                entry_val = p.quantity * p.entry_price
+                entry_val = p.quantity * p.entry_price + (p.entry_fee_amount or 0.0)
                 curr_val = p.quantity * p.current_price
                 p.unrealized_pnl = curr_val - entry_val
                 p.unrealized_pnl_pct = ((p.current_price - p.entry_price) / p.entry_price * 100.0) if p.entry_price > 0 else 0.0
@@ -73,7 +73,7 @@ class PortfolioService:
             unrealized += p.unrealized_pnl
 
         total_equity = cash + pos_val
-        realized = total_equity - self.config.virtual_balance
+        realized = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0)).scalar()
         peak = max(prev_peak, total_equity)
         drawdown = ((peak - total_equity) / peak * 100.0) if peak > 0 else 0.0
 

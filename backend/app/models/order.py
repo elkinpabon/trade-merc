@@ -64,6 +64,8 @@ class PaperPosition(db.Model):
     __tablename__ = 'paper_positions'
 
     id = db.Column(db.String(64), primary_key=True)
+    # A single row is retained per symbol and reset on re-entry so paper
+    # history does not violate the unique symbol constraint.
     symbol = db.Column(db.String(32), nullable=False, unique=True)
     side = db.Column(db.String(10), default='LONG')
     quantity = db.Column(db.Float, default=0.0)
@@ -73,6 +75,8 @@ class PaperPosition(db.Model):
     unrealized_pnl_pct = db.Column(db.Float, default=0.0)
     stop_loss_price = db.Column(db.Float, nullable=True)
     take_profit_price = db.Column(db.Float, nullable=True)
+    entry_order_id = db.Column(db.String(64), nullable=True)
+    entry_fee_amount = db.Column(db.Float, default=0.0)
     is_open = db.Column(db.Boolean, default=True)
     opened_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -89,6 +93,8 @@ class PaperPosition(db.Model):
             "unrealized_pnl_pct": float(self.unrealized_pnl_pct),
             "stop_loss_price": float(self.stop_loss_price) if self.stop_loss_price else None,
             "take_profit_price": float(self.take_profit_price) if self.take_profit_price else None,
+            "entry_order_id": self.entry_order_id,
+            "entry_fee_amount": float(self.entry_fee_amount or 0.0),
             "is_open": self.is_open,
             "opened_at": self.opened_at.isoformat() if self.opened_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

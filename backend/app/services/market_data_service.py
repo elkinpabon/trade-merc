@@ -112,10 +112,11 @@ class MarketDataService:
             return []
 
     def get_ohlcv_dataframe(self, symbol: str, timeframe: str = '5m', limit: int = 100) -> pd.DataFrame:
-        """Returns OHLCV candles as Pandas DataFrame for indicator calculations."""
+        """Returns only closed OHLCV candles for reproducible decisions."""
         candles = self.fetch_public_ohlcv(symbol, timeframe, limit)
         if not candles:
             return pd.DataFrame()
         df = pd.DataFrame(candles)
         df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-        return df
+        # Exchange responses include the current, mutable candle as the last row.
+        return df.iloc[:-1].copy() if len(df) > 1 else pd.DataFrame()

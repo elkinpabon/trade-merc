@@ -30,7 +30,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = db_url
     
     ssl_config = {}
-    if has_ca:
+    if has_ca and db_url.startswith('mysql'):
         ssl_config = {"ssl": {"ca": ca_cert_path, "check_hostname": False}}
     elif "tidbcloud.com" in db_url:
         ssl_config = {"ssl": {"ssl_mode": "VERIFY_IDENTITY"}}

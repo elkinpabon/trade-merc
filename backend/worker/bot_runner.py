@@ -20,7 +20,7 @@ from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
 from app.utils.helpers import utc_now
 
-def run_bot_loop(app: Flask):
+def run_bot_loop(app: Flask, max_cycles: int | None = None):
     """
     Advanced Multi-Factor Multi-Market Execution Loop.
     Scans 50+ pairs, computes composite scores using 10+ indicators,
@@ -31,7 +31,8 @@ def run_bot_loop(app: Flask):
     with app.app_context():
         LogService.log("INFO", "BotRunner", "Motor Multi-Factor avanzado inicializado: EMA+RSI+MACD+BB+ATR+ADX+StochRSI+OBV+VWAP")
 
-    while True:
+    completed_cycles = 0
+    while max_cycles is None or completed_cycles < max_cycles:
         polling_interval = 1
         with app.app_context():
             try:
@@ -169,7 +170,7 @@ def run_bot_loop(app: Flask):
                                 allowed, reason, qty = risk_svc.validate_signal_risk(signal, current_price)
 
                                 if allowed and qty > 0:
-                                    signal.status = 'EXECUTED'
+                                    signal.status = 'SUBMITTED'
                                     db.session.commit()
 
                                     order_res = executor.place_order(
@@ -182,10 +183,14 @@ def run_bot_loop(app: Flask):
                                     )
 
                                     if order_res.get('success'):
+                                        signal.status = 'EXECUTED'
+                                        db.session.commit()
                                         LogService.log('INFO', 'ExecutionEngine', f"Orden ejecutada: {signal.type} {qty:.4f} {symbol} a ${current_price:.2f}")
                                         broadcast_event('order_created', order_res.get('order'))
                                         broadcast_event('fill_created', order_res.get('fill'))
                                     else:
+                                        signal.status = 'REJECTED'
+                                        db.session.commit()
                                         LogService.log('ERROR', 'ExecutionEngine', f"Orden fallida: {order_res.get('error')}")
                                 else:
                                     signal.status = 'REJECTED'
@@ -204,4 +209,6 @@ def run_bot_loop(app: Flask):
                 traceback.print_exc()
                 HealthService.update_component_health("bot_worker", "DEGRADED", str(e))
 
-        time.sleep(polling_interval)
+        completed_cycles += 1
+        if max_cycles is None:
+            time.sleep(polling_interval)

@@ -22,6 +22,9 @@ class IndicatorService:
         loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
         rs = gain / loss.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
+        # A series with gains and no losses is overbought, not neutral.
+        rsi = rsi.mask((gain > 0) & (loss == 0), 100.0)
+        rsi = rsi.mask((gain == 0) & (loss > 0), 0.0)
         return rsi.fillna(50.0)
 
     @staticmethod
@@ -92,7 +95,8 @@ class IndicatorService:
         loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
         rs = gain / loss.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
-        rsi = rsi.fillna(50.0)
+        rsi = rsi.mask((gain > 0) & (loss == 0), 100.0)
+        rsi = rsi.mask((gain == 0) & (loss > 0), 0.0).fillna(50.0)
 
         rsi_min = rsi.rolling(window=stoch_period).min()
         rsi_max = rsi.rolling(window=stoch_period).max()

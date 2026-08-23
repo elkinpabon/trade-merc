@@ -48,34 +48,58 @@ class PaperExecutionEngine(BaseExecutionEngine):
 
         return True, "OK"
 
+    @staticmethod
+    def _default_price_precision(price: float) -> int:
+        if price < 1:
+            return 6
+        if price < 100:
+            return 4
+        return 2
+
+    def _reject_order(self, symbol: str, side: str, order_type: str, quantity: float, price: float,
+                      signal_id: Optional[str], reason: str) -> Dict[str, Any]:
+        order = PaperOrder(
+            id=generate_uuid(), signal_id=signal_id, symbol=symbol, side=side,
+            type=order_type, quantity=quantity, requested_price=price,
+            status='REJECTED', rejection_reason=reason, created_at=utc_now()
+        )
+        db.session.add(order)
+        db.session.commit()
+        return {"success": False, "error": reason, "order": order.to_dict()}
+
     def place_order(self, symbol: str, side: str, order_type: str, quantity: float, price: float, signal_id: Optional[str] = None) -> Dict[str, Any]:
         side = side.upper()
         order_type = order_type.upper()
 
+        # A worker retry must not generate a second fill for the same signal.
+        if signal_id:
+            previous_order = PaperOrder.query.filter_by(signal_id=signal_id).first()
+            if previous_order:
+                existing_fill = PaperFill.query.filter_by(order_id=previous_order.id).first()
+                return {
+                    "success": previous_order.status == 'FILLED',
+                    "error": previous_order.rejection_reason,
+                    "order": previous_order.to_dict(),
+                    "fill": existing_fill.to_dict() if existing_fill else None,
+                    "idempotent": True,
+                }
+
         rule = SymbolRule.query.filter_by(symbol=symbol).first()
         qty_prec = rule.qty_precision if rule else 6
-        price_prec = rule.price_precision if rule else 2
+        price_prec = rule.price_precision if rule else self._default_price_precision(price)
 
         quantity = round_qty(quantity, qty_prec)
         price = round_price(price, price_prec)
 
         valid, msg = self.validate_symbol_rules(symbol, quantity, price)
         if not valid:
-            rejected_order = PaperOrder(
-                id=generate_uuid(),
-                signal_id=signal_id,
-                symbol=symbol,
-                side=side,
-                type=order_type,
-                quantity=quantity,
-                requested_price=price,
-                status='REJECTED',
-                rejection_reason=msg,
-                created_at=utc_now()
-            )
-            db.session.add(rejected_order)
-            db.session.commit()
-            return {"success": False, "error": msg, "order": rejected_order.to_dict()}
+            return self._reject_order(symbol, side, order_type, quantity, price, signal_id, msg)
+
+        position = PaperPosition.query.filter_by(symbol=symbol, is_open=True).first()
+        if side == 'SELL':
+            if not position or position.quantity <= 0:
+                return self._reject_order(symbol, side, order_type, quantity, price, signal_id, "No open position to sell.")
+            quantity = min(quantity, position.quantity)
 
         fill_price = round_price(self.estimate_slippage(price, side, self.slippage_pct), price_prec)
         notional = quantity * fill_price
@@ -88,21 +112,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
             total_required = notional + fee_amount
             if current_cash < total_required:
                 msg = f"Insufficient balance: Required ${total_required:.2f}, Available ${current_cash:.2f}"
-                rejected_order = PaperOrder(
-                    id=generate_uuid(),
-                    signal_id=signal_id,
-                    symbol=symbol,
-                    side=side,
-                    type=order_type,
-                    quantity=quantity,
-                    requested_price=price,
-                    status='REJECTED',
-                    rejection_reason=msg,
-                    created_at=utc_now()
-                )
-                db.session.add(rejected_order)
-                db.session.commit()
-                return {"success": False, "error": msg, "order": rejected_order.to_dict()}
+                return self._reject_order(symbol, side, order_type, quantity, price, signal_id, msg)
 
         order_id = generate_uuid()
         fill_id = generate_uuid()
@@ -137,62 +147,62 @@ class PaperExecutionEngine(BaseExecutionEngine):
         db.session.add(fill)
         db.session.flush()
 
-        position = PaperPosition.query.filter_by(symbol=symbol, is_open=True).first()
-
         if side == 'BUY':
             new_cash = current_cash - (notional + fee_amount)
 
             if not position:
-                position = PaperPosition(
-                    id=generate_uuid(),
-                    symbol=symbol,
-                    side='LONG',
-                    quantity=quantity,
-                    entry_price=fill_price,
-                    current_price=fill_price,
-                    unrealized_pnl=0.0,
-                    unrealized_pnl_pct=0.0,
-                    stop_loss_price=round_price(fill_price * (1.0 - self.stop_loss_pct / 100.0), price_prec),
-                    take_profit_price=round_price(fill_price * (1.0 + self.take_profit_pct / 100.0), price_prec),
-                    is_open=True,
-                    opened_at=utc_now()
-                )
-                db.session.add(position)
+                # Reuse a closed row because symbol is unique in the legacy schema.
+                position = PaperPosition.query.filter_by(symbol=symbol).first()
+                if not position:
+                    position = PaperPosition(id=generate_uuid(), symbol=symbol)
+                    db.session.add(position)
+                position.side = 'LONG'
+                position.quantity = quantity
+                position.entry_price = fill_price
+                position.current_price = fill_price
+                position.unrealized_pnl = -fee_amount
+                position.unrealized_pnl_pct = -((fee_amount / notional) * 100.0) if notional else 0.0
+                position.stop_loss_price = round_price(fill_price * (1.0 - self.stop_loss_pct / 100.0), price_prec)
+                position.take_profit_price = round_price(fill_price * (1.0 + self.take_profit_pct / 100.0), price_prec)
+                position.entry_order_id = order_id
+                position.entry_fee_amount = fee_amount
+                position.is_open = True
+                position.opened_at = utc_now()
+                position.updated_at = utc_now()
             else:
                 total_qty = position.quantity + quantity
                 avg_entry = ((position.quantity * position.entry_price) + notional) / total_qty
                 position.quantity = total_qty
                 position.entry_price = round_price(avg_entry, price_prec)
                 position.current_price = fill_price
+                position.entry_fee_amount = (position.entry_fee_amount or 0.0) + fee_amount
                 position.stop_loss_price = round_price(avg_entry * (1.0 - self.stop_loss_pct / 100.0), price_prec)
                 position.take_profit_price = round_price(avg_entry * (1.0 + self.take_profit_pct / 100.0), price_prec)
                 position.updated_at = utc_now()
 
         elif side == 'SELL':
-            if not position:
-                db.session.rollback()
-                return {"success": False, "error": "No open position to sell."}
-
-            close_qty = min(quantity, position.quantity)
+            close_qty = quantity
             gross_proceeds = close_qty * fill_price
             new_cash = current_cash + gross_proceeds - fee_amount
 
             cost_basis = close_qty * position.entry_price
-            realized_pnl = (gross_proceeds - fee_amount) - cost_basis
-            realized_pnl_pct = (realized_pnl / cost_basis) * 100.0 if cost_basis > 0 else 0.0
+            entry_fee = (position.entry_fee_amount or 0.0) * (close_qty / position.quantity)
+            realized_pnl = (gross_proceeds - fee_amount) - cost_basis - entry_fee
+            total_fee = entry_fee + fee_amount
+            realized_pnl_pct = (realized_pnl / (cost_basis + entry_fee)) * 100.0 if cost_basis > 0 else 0.0
 
             trade = Trade(
                 id=generate_uuid(),
                 symbol=symbol,
                 side='LONG',
-                entry_order_id=position.id,
+                entry_order_id=position.entry_order_id,
                 exit_order_id=order_id,
                 entry_price=position.entry_price,
                 exit_price=fill_price,
                 quantity=close_qty,
                 realized_pnl=round_price(realized_pnl, 4),
                 realized_pnl_pct=round_price(realized_pnl_pct, 2),
-                total_fee=fee_amount,
+                total_fee=total_fee,
                 exit_reason='SIGNAL',
                 opened_at=position.opened_at,
                 closed_at=utc_now()
@@ -200,6 +210,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
             db.session.add(trade)
 
             position.quantity -= close_qty
+            position.entry_fee_amount = max(0.0, (position.entry_fee_amount or 0.0) - entry_fee)
             if position.quantity <= 0.000001:
                 position.is_open = False
                 position.quantity = 0.0
@@ -212,11 +223,12 @@ class PaperExecutionEngine(BaseExecutionEngine):
         peak_equity = max(prev_peak, total_equity)
         drawdown_pct = ((peak_equity - total_equity) / peak_equity * 100.0) if peak_equity > 0 else 0.0
 
+        realized_pnl_total = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0)).scalar()
         snapshot = PortfolioSnapshot(
             cash_balance=round_price(new_cash, 2),
             positions_value=round_price(pos_val, 2),
             total_equity=round_price(total_equity, 2),
-            realized_pnl=round_price((total_equity - self.virtual_balance), 2),
+            realized_pnl=round_price(realized_pnl_total, 2),
             unrealized_pnl=round_price(sum(p.unrealized_pnl for p in open_positions), 2),
             peak_equity=round_price(peak_equity, 2),
             drawdown_pct=round_price(drawdown_pct, 2),

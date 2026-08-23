@@ -76,17 +76,16 @@ class RiskService:
                 self.log_risk_event("MAX_POSITIONS_REACHED", signal.symbol, msg)
                 return False, msg, 0.0
 
-            # 3. Position Sizing based on Risk Percentage
+            # 3. Position sizing based on the loss at the configured stop.
             risk_amount = total_equity * (self.config.risk_per_trade_pct / 100.0)
             sl_pct = self.config.stop_loss_pct / 100.0
-            
-            # Position capital allocation (max 30% of portfolio per trade for spot safety)
-            max_capital_per_trade = min(cash * 0.95, total_equity * 0.30)
-            
-            if current_price <= 0:
+
+            if current_price <= 0 or sl_pct <= 0:
                 return False, "Invalid market price", 0.0
 
-            quantity = max_capital_per_trade / current_price
+            quantity_by_risk = risk_amount / (current_price * sl_pct)
+            max_capital_per_trade = min(cash * 0.95, total_equity * 0.20)
+            quantity = min(quantity_by_risk, max_capital_per_trade / current_price)
 
             if quantity * current_price < 10.0:
                 msg = f"Order capital allocation (${quantity * current_price:.2f}) below minimum requirements."

@@ -419,7 +419,7 @@ class StrategyService:
 
                 signal = Signal(
                     id=generate_uuid(), bot_run_id=bot_run_id, symbol=symbol,
-                    type='BUY', action='ENTRY_LONG', price=close_price,
+                    type='BUY', action='ENTER_LONG', price=close_price,
                     reason=reason, indicators_json=indicators_json_str,
                     status='PENDING', timestamp=utc_now()
                 )
