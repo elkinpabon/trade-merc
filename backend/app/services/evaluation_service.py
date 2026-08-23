@@ -72,6 +72,8 @@ class EvaluationService:
     @classmethod
     def resolve_pending(cls, limit: int = 200) -> int:
         evaluations = StrategyEvaluation.query.filter_by(label_status='PENDING').order_by(StrategyEvaluation.decision_candle_ts.asc()).limit(limit).all()
+        if len(evaluations) > 1000:
+            return cls._resolve_batch(evaluations)
         resolved = 0
         for evaluation in evaluations:
             candles = Candle.query.filter(
@@ -97,6 +99,50 @@ class EvaluationService:
             evaluation.label_candle_ts = label_candle.timestamp
             evaluation.label_at = label_candle.datetime
             evaluation.time_to_label_candles = candles.index(label_candle) + 1
+            evaluation.max_favorable_excursion_pct = mfe
+            evaluation.max_adverse_excursion_pct = mae
+            evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0
+            resolved += 1
+        if resolved:
+            db.session.commit()
+        return resolved
+
+    @classmethod
+    def _resolve_batch(cls, evaluations) -> int:
+        """Resolve large historical batches using one candle query instead of one per row."""
+        symbols = {evaluation.symbol for evaluation in evaluations}
+        timeframes = {evaluation.timeframe for evaluation in evaluations}
+        candles = Candle.query.filter(Candle.symbol.in_(symbols), Candle.timeframe.in_(timeframes)).order_by(Candle.symbol, Candle.timeframe, Candle.timestamp).all()
+        grouped = {}
+        indexes = {}
+        for candle in candles:
+            key = (candle.symbol, candle.timeframe)
+            indexes.setdefault(key, {})[candle.timestamp] = len(grouped.setdefault(key, []))
+            grouped[key].append(candle)
+        resolved = 0
+        for evaluation in evaluations:
+            candle_list = grouped.get((evaluation.symbol, evaluation.timeframe), [])
+            index = indexes.get((evaluation.symbol, evaluation.timeframe), {}).get(evaluation.decision_candle_ts)
+            if index is None:
+                continue
+            future = candle_list[index + 1:index + 1 + evaluation.horizon_candles]
+            if len(future) < evaluation.horizon_candles:
+                continue
+            mfe = max((candle.high - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in future)
+            mae = min((candle.low - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in future)
+            label, label_candle = 'TIMEOUT', future[-1]
+            for candle in future:
+                if candle.low <= evaluation.sl_price:
+                    label, label_candle = 'SL_HIT', candle
+                    break
+                if candle.high >= evaluation.tp_price:
+                    label, label_candle = 'TP_HIT', candle
+                    break
+            evaluation.label_status = 'RESOLVED'
+            evaluation.label = label
+            evaluation.label_candle_ts = label_candle.timestamp
+            evaluation.label_at = label_candle.datetime
+            evaluation.time_to_label_candles = future.index(label_candle) + 1
             evaluation.max_favorable_excursion_pct = mfe
             evaluation.max_adverse_excursion_pct = mae
             evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0
