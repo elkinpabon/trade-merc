@@ -5,7 +5,7 @@ os.environ['DATABASE_URL'] = 'sqlite://'
 
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, PaperFill, PaperOrder, PaperPosition, PortfolioSnapshot, Signal, Trade
+from app.models import BotConfig, PaperFill, PaperOrder, PaperPosition, PortfolioSnapshot, Signal, Trade, ModelVersion
 from app.models import Candle, StrategyEvaluation
 from app.services.evaluation_service import EvaluationService
 from app.services.backtest_service import BacktestService
@@ -14,6 +14,7 @@ from app.services.indicator_service import IndicatorService
 from app.services.market_data_service import MarketDataService
 from app.services.risk_service import RiskService
 from app.services.model_service import ModelService
+from worker.bot_runner import recover_stale_submitted_signals
 from app.utils.helpers import generate_uuid, utc_now
 
 
@@ -107,6 +108,30 @@ class PaperTradingTestCase(unittest.TestCase):
         self.assertEqual(model.status, 'active')
         self.assertGreaterEqual(probability, 0.05)
         self.assertLessEqual(probability, 0.95)
+
+    def test_unvalidated_logistic_model_cannot_control_execution(self):
+        baseline = ModelService.ensure_baseline()
+        baseline.status = 'retired'
+        db.session.add(ModelVersion(
+            id=generate_uuid(), model_name='multifactor', version='logistic-test', status='active',
+            algorithm='logistic_regression', feature_schema_json='[]', parameters_json='{}',
+            metrics_json='{"brier_score": 0.01, "validated_for_execution": false}', created_at=utc_now(),
+        ))
+        db.session.commit()
+
+        self.assertEqual(ModelService.active_model().id, baseline.id)
+
+    def test_stale_submitted_signal_is_recovered(self):
+        signal = Signal(id=generate_uuid(), bot_run_id='run', symbol='BTC/USDT', type='BUY',
+                        action='ENTER_LONG', price=100, reason='test', status='SUBMITTED',
+                        timestamp=utc_now() - __import__('datetime').timedelta(minutes=30))
+        db.session.add(signal)
+        db.session.commit()
+
+        recovered = recover_stale_submitted_signals()
+
+        self.assertEqual(recovered, 1)
+        self.assertEqual(db.session.get(Signal, signal.id).status, 'REJECTED')
 
     def test_evaluation_is_labeled_from_future_closed_candles(self):
         import pandas as pd

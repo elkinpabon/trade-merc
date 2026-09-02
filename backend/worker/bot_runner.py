@@ -1,10 +1,10 @@
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, BotRun, PaperPosition
+from app.models import BotConfig, BotRun, PaperPosition, PaperOrder, Signal
 from app.services import (
     MarketDataService,
     SymbolRulesService,
@@ -22,6 +22,22 @@ from app.services import (
 from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
 from app.utils.helpers import utc_now
+
+
+def recover_stale_submitted_signals(max_age_minutes: int = 15) -> int:
+    """Moves interrupted submissions out of the execution state machine."""
+    cutoff = utc_now() - timedelta(minutes=max_age_minutes)
+    stale = Signal.query.filter(Signal.status == 'SUBMITTED', Signal.timestamp < cutoff).all()
+    recovered = 0
+    for signal in stale:
+        if PaperOrder.query.filter_by(signal_id=signal.id).first():
+            continue
+        signal.status = 'REJECTED'
+        signal.reason = (signal.reason or '') + ' | Recuperada: no existia orden asociada.'
+        recovered += 1
+    if recovered:
+        db.session.commit()
+    return recovered
 
 def run_bot_loop(app: Flask, max_cycles: int | None = None):
     """
@@ -52,6 +68,10 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 if not active_run:
                     time.sleep(1)
                     continue
+
+                recovered = recover_stale_submitted_signals()
+                if recovered:
+                    LogService.log('WARNING', 'ExecutionEngine', f"Señales SUBMITTED recuperadas: {recovered}")
 
                 active_run.last_heartbeat = utc_now()
                 db.session.commit()

@@ -36,7 +36,16 @@ class ModelService:
 
     @staticmethod
     def active_model() -> ModelVersion:
-        return ModelVersion.query.filter_by(status='active').order_by(ModelVersion.created_at.desc()).first() or ModelService.ensure_baseline()
+        # A candidate is not allowed to control paper decisions until it has
+        # passed a trading validation gate, not just a classification metric.
+        active = ModelVersion.query.filter_by(status='active').order_by(ModelVersion.created_at.desc()).all()
+        for model in active:
+            if model.algorithm != 'logistic_regression':
+                continue
+            metrics = json.loads(model.metrics_json or '{}')
+            if metrics.get('validated_for_execution') is True:
+                return model
+        return ModelVersion.query.filter_by(model_name='multifactor', version='baseline-v1').first() or ModelService.ensure_baseline()
 
     @staticmethod
     def baseline_probability(features: dict) -> float:
@@ -101,14 +110,10 @@ class ModelService:
                 'coefficients': dict(zip(FEATURE_NAMES, weights.tolist())),
                 'intercept': float(intercept), 'cost_pct': 0.002,
             }),
-            metrics_json=json.dumps({'samples': len(evaluations), 'validation_samples': len(validation_y), 'brier_score': brier, 'log_loss': log_loss}),
+            metrics_json=json.dumps({'samples': len(evaluations), 'validation_samples': len(validation_y), 'brier_score': brier, 'log_loss': log_loss, 'validated_for_execution': False}),
             training_window_start=evaluations[0].decision_at, training_window_end=evaluations[-1].decision_at,
             created_at=utc_now(),
         )
         db.session.add(candidate)
-        # Promote only a validated candidate; previous versions remain auditable.
-        if len(evaluations) >= 500 and brier <= 0.22:
-            ModelVersion.query.filter_by(status='active').update({'status': 'retired'})
-            candidate.status = 'active'
         db.session.commit()
         return candidate
