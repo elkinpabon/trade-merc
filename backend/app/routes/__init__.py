@@ -9,7 +9,6 @@ from app.routes.analytics import analytics_bp
 from app.routes.logs import logs_bp
 from app.routes.exchange import exchange_bp
 from app.routes.auth import auth_bp
-from app.routes.cron import cron_bp
 
 def register_routes(app: Flask):
     app.register_blueprint(auth_bp, url_prefix='/api')
@@ -22,4 +21,3 @@ def register_routes(app: Flask):
     app.register_blueprint(analytics_bp, url_prefix='/api')
     app.register_blueprint(logs_bp, url_prefix='/api')
     app.register_blueprint(exchange_bp, url_prefix='/api')
-    app.register_blueprint(cron_bp, url_prefix='/api')
