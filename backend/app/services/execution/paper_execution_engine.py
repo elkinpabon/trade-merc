@@ -4,6 +4,7 @@ from app.services.execution.base_execution_engine import BaseExecutionEngine
 from app.extensions import db
 from app.models import PaperOrder, PaperFill, PaperPosition, Trade, BotConfig, PortfolioSnapshot, SymbolRule
 from app.utils.helpers import generate_uuid, round_qty, round_price, utc_now
+from app.services.experiment_service import ExperimentService
 
 class PaperExecutionEngine(BaseExecutionEngine):
     """
@@ -15,6 +16,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
     def __init__(self, config: BotConfig):
         # Extract plain primitive values to prevent SQLAlchemy DetachedInstanceError across sessions
         self.virtual_balance = float(config.virtual_balance) if config else 1000.0
+        self.config_id = config.id if config else None
         self.slippage_pct = float(config.slippage_pct) if config else 0.05
         self.fee_pct = float(config.fee_pct) if config else 0.10
         self.stop_loss_pct = float(config.stop_loss_pct) if config else 2.0
@@ -58,10 +60,11 @@ class PaperExecutionEngine(BaseExecutionEngine):
 
     def _reject_order(self, symbol: str, side: str, order_type: str, quantity: float, price: float,
                       signal_id: Optional[str], reason: str) -> Dict[str, Any]:
+        attribution = ExperimentService.attribution(self.config_id)
         order = PaperOrder(
             id=generate_uuid(), signal_id=signal_id, symbol=symbol, side=side,
             type=order_type, quantity=quantity, requested_price=price,
-            status='REJECTED', rejection_reason=reason, created_at=utc_now()
+            status='REJECTED', rejection_reason=reason, created_at=utc_now(), **attribution
         )
         db.session.add(order)
         db.session.commit()
@@ -70,6 +73,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
     def place_order(self, symbol: str, side: str, order_type: str, quantity: float, price: float, signal_id: Optional[str] = None) -> Dict[str, Any]:
         side = side.upper()
         order_type = order_type.upper()
+        attribution = ExperimentService.attribution(self.config_id)
 
         # A worker retry must not generate a second fill for the same signal.
         if signal_id:
@@ -105,7 +109,10 @@ class PaperExecutionEngine(BaseExecutionEngine):
         notional = quantity * fill_price
         fee_amount = round_price(self.estimate_fees(notional, self.fee_pct), 4)
 
-        latest_snapshot = PortfolioSnapshot.query.order_by(PortfolioSnapshot.id.desc()).first()
+        snapshot_query = PortfolioSnapshot.query
+        if attribution['strategy_run_id']:
+            snapshot_query = snapshot_query.filter_by(strategy_run_id=attribution['strategy_run_id'])
+        latest_snapshot = snapshot_query.order_by(PortfolioSnapshot.id.desc()).first()
         current_cash = latest_snapshot.cash_balance if latest_snapshot else self.virtual_balance
 
         if side == 'BUY':
@@ -128,7 +135,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
             status='FILLED',
             simulated_fee=fee_amount,
             simulated_slippage=abs(fill_price - price),
-            created_at=utc_now()
+            created_at=utc_now(), **attribution
         )
         db.session.add(order)
         db.session.flush()
@@ -142,7 +149,7 @@ class PaperExecutionEngine(BaseExecutionEngine):
             fill_quantity=quantity,
             fee_amount=fee_amount,
             fee_currency='USDT',
-            timestamp=utc_now()
+            timestamp=utc_now(), **attribution
         )
         db.session.add(fill)
         db.session.flush()
@@ -166,6 +173,9 @@ class PaperExecutionEngine(BaseExecutionEngine):
                 position.take_profit_price = round_price(fill_price * (1.0 + self.take_profit_pct / 100.0), price_prec)
                 position.entry_order_id = order_id
                 position.entry_fee_amount = fee_amount
+                position.strategy_run_id = attribution['strategy_run_id']
+                position.model_version_id = attribution['model_version_id']
+                position.config_id = attribution['config_id']
                 position.is_open = True
                 position.opened_at = utc_now()
                 position.updated_at = utc_now()
@@ -193,6 +203,9 @@ class PaperExecutionEngine(BaseExecutionEngine):
 
             trade = Trade(
                 id=generate_uuid(),
+                strategy_run_id=position.strategy_run_id,
+                model_version_id=position.model_version_id,
+                config_id=position.config_id,
                 symbol=symbol,
                 side='LONG',
                 entry_order_id=position.entry_order_id,
@@ -223,8 +236,12 @@ class PaperExecutionEngine(BaseExecutionEngine):
         peak_equity = max(prev_peak, total_equity)
         drawdown_pct = ((peak_equity - total_equity) / peak_equity * 100.0) if peak_equity > 0 else 0.0
 
-        realized_pnl_total = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0)).scalar()
+        realized_query = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0))
+        if attribution['strategy_run_id']:
+            realized_query = realized_query.filter(Trade.strategy_run_id == attribution['strategy_run_id'])
+        realized_pnl_total = realized_query.scalar()
         snapshot = PortfolioSnapshot(
+            **attribution,
             cash_balance=round_price(new_cash, 2),
             positions_value=round_price(pos_val, 2),
             total_equity=round_price(total_equity, 2),

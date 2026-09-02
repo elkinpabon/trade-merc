@@ -18,19 +18,14 @@ interface ScannedMarket {
   pattern_tag: string;
 }
 
-const FALLBACK_POPULAR_COINS: ScannedMarket[] = [
-  { symbol: "BTC/USDT", price: 65192.00, change_pct: 0.00, volume_24h: 445800000, spread_range_pct: 1.2, anomaly_score: 85, pattern_tag: "NEUTRAL" },
-  { symbol: "ETH/USDT", price: 1926.00, change_pct: 0.00, volume_24h: 319600000, spread_range_pct: 1.8, anomaly_score: 72, pattern_tag: "NEUTRAL" },
-  { symbol: "SOL/USDT", price: 76.50, change_pct: 0.00, volume_24h: 224600000, spread_range_pct: 2.4, anomaly_score: 91, pattern_tag: "NEUTRAL" },
-  { symbol: "BNB/USDT", price: 580.40, change_pct: 0.15, volume_24h: 120000000, spread_range_pct: 1.1, anomaly_score: 80, pattern_tag: "NEUTRAL" },
-  { symbol: "XRP/USDT", price: 1.03, change_pct: -0.01, volume_24h: 21100000, spread_range_pct: 1.2, anomaly_score: 95, pattern_tag: "NEUTRAL" }
-];
-
 export const DashboardOverview: React.FC = () => {
   const [summary, setSummary] = useState<any>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('BTC/USDT');
   const [candles, setCandles] = useState<CandleData[]>([]);
-  const [scannedMarkets, setScannedMarkets] = useState<ScannedMarket[]>(FALLBACK_POPULAR_COINS);
+  const [scannedMarkets, setScannedMarkets] = useState<ScannedMarket[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [chartLoading, setChartLoading] = useState(false);
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
@@ -54,13 +49,19 @@ export const DashboardOverview: React.FC = () => {
     try {
       const dashData = await api.getDashboardSummary();
       setSummary(dashData);
-
-      const scannerData = await api.getMarketScanner();
-      if (scannerData?.markets && scannerData.markets.length > 0) {
-        setScannedMarkets(scannerData.markets);
-      }
+      setDataError(null);
     } catch (err) {
       console.error('Error al cargar resumen:', err);
+      setDataError('No se pudo consultar el dashboard en la base de datos.');
+    }
+    try {
+      const scannerData = await api.getMarketScanner();
+      setScannedMarkets(scannerData.markets || []);
+      setMarketError(null);
+    } catch (err) {
+      console.error('Error al cargar mercados:', err);
+      setScannedMarkets([]);
+      setMarketError('Feed de Binance no disponible.');
     }
   }, []);
 
@@ -96,8 +97,10 @@ export const DashboardOverview: React.FC = () => {
         if (res?.logs && res.logs.length > 0) {
           setLiveLogs(res.logs);
         }
-      } catch (e) {
-        // Fallback error ignore
+        setLogsError(null);
+      } catch (error) {
+        console.error('Error al cargar logs:', error);
+        setLogsError('Logs no disponibles.');
       }
     };
     fetchLiveLogs();
@@ -119,32 +122,33 @@ export const DashboardOverview: React.FC = () => {
 
   return (
     <div className="space-y-4 font-sans text-black">
+      {dataError && <div className="win95-inset bg-white p-2 text-xs font-mono font-bold text-[#cc0000]">{dataError}</div>}
       {/* Top Inset Bar: PNL ALL OPEN, Margin, Today */}
       <div className="win95-panel p-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#808080] pb-2 mb-2 gap-2">
           <div>
             <h1 className="text-lg sm:text-xl font-bold font-sans text-[#000080]">Operaciones de Trading en Vivo</h1>
-            <p className="text-xs text-[#404040] font-mono">{p?.open_positions_count || 0} posiciones abiertas</p>
+            <p className="text-xs text-[#404040] font-mono">{p ? p.open_positions_count : '--'} posiciones abiertas</p>
           </div>
           <div className="text-xs font-mono font-bold bg-[#000080] text-white px-3 py-1 self-stretch sm:self-auto text-center sm:text-left">
-            CAPITAL DE TRADING: ${p?.total_equity?.toFixed(2) || '100.00'} USD
+            CAPITAL DE TRADING: {p ? `$${p.total_equity.toFixed(2)} USD` : 'NO DISPONIBLE'}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <StatCard
             title="PNL FLOTANTE (ABIERTO)"
-            value={`+$${p?.unrealized_pnl?.toFixed(2) || '0.00'}`}
+            value={p ? `${p.unrealized_pnl >= 0 ? '+' : ''}$${p.unrealized_pnl.toFixed(2)}` : '--'}
             trend={p?.unrealized_pnl >= 0 ? 'up' : 'down'}
           />
           <StatCard
             title="MARGEN EN POSICIONES"
-            value={`$${p?.positions_value?.toFixed(2) || '0.00'}`}
+            value={p ? `$${p.positions_value.toFixed(2)}` : '--'}
             trend="neutral"
           />
           <StatCard
             title="GANANCIA REALIZADA"
-            value={`+$${p?.realized_pnl?.toFixed(2) || '0.00'}`}
+            value={p ? `${p.realized_pnl >= 0 ? '+' : ''}$${p.realized_pnl.toFixed(2)}` : '--'}
             trend={p?.realized_pnl >= 0 ? 'up' : 'down'}
           />
         </div>
@@ -192,7 +196,11 @@ export const DashboardOverview: React.FC = () => {
 
           {/* Scrollable Coin List */}
           <div className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
-            {filteredMarkets.map((m) => (
+            {marketError ? (
+              <div className="p-4 text-center text-xs font-mono text-[#cc0000]">{marketError}</div>
+            ) : filteredMarkets.length === 0 ? (
+              <div className="p-4 text-center text-xs font-mono text-[#808080]">No hay mercados disponibles.</div>
+            ) : filteredMarkets.map((m) => (
               <div
                 key={m.symbol}
                 onClick={() => handleSelectCoin(m.symbol)}
@@ -257,8 +265,8 @@ export const DashboardOverview: React.FC = () => {
               );
             })
           ) : (
-            <div className="text-[#007a3d] font-mono animate-pulse">
-              [TRADEMERC] Motor Multi-Factor analizando 10 indicadores en 50 pares de Binance en tiempo real...
+            <div className={`font-mono ${logsError ? 'text-[#cc0000]' : 'text-[#808080]'}`}>
+              {logsError || 'No hay logs registrados.'}
             </div>
           )}
           <div ref={logsEndRef} />
@@ -316,7 +324,7 @@ export const DashboardOverview: React.FC = () => {
           </div>
         ) : (
           <div className="win95-inset bg-white p-6 text-center text-xs font-mono text-[#808080]">
-            No hay posiciones abiertas actualmente. El bot está escaneando los 50 mercados para ejecutar la siguiente compra.
+            No hay posiciones abiertas registradas actualmente.
           </div>
         )}
       </div>

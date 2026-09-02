@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { PriceChart } from '@/components/charts/PriceChart';
 import { api } from '@/lib/api';
-import { CandleData } from '@/types';
+import { CandleData, SignalData } from '@/types';
 import { Zap } from 'lucide-react';
 
 export const MarketView: React.FC = () => {
@@ -11,20 +11,42 @@ export const MarketView: React.FC = () => {
   const [timeframe, setTimeframe] = useState('15m');
   const [candles, setCandles] = useState<CandleData[]>([]);
   const [ticker, setTicker] = useState<any>(null);
+  const [signal, setSignal] = useState<SignalData | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setUnavailable(false);
+    setCandles([]);
+    setTicker(null);
+    setSignal(null);
     Promise.all([
       api.getCandles(symbol, timeframe, 100),
       api.getTicker(symbol),
+      api.getSignals(),
     ])
-      .then(([cData, tData]) => {
+      .then(([cData, tData, signals]) => {
+        if (cancelled) return;
         setCandles(cData);
         setTicker(tData);
+        setSignal(signals.find((item) => item.symbol === symbol) || null);
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Market sources unavailable:', error);
+        setCandles([]);
+        setTicker(null);
+        setSignal(null);
+        setUnavailable(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [symbol, timeframe]);
 
   return (
@@ -48,13 +70,19 @@ export const MarketView: React.FC = () => {
           <span className="font-mono text-xs">· perp · cross · 20x</span>
         </div>
         <div className="text-sm font-mono font-bold">
-          ${ticker?.last ? ticker.last.toFixed(2) : '65,192.00'}
+          {ticker ? `$${ticker.last.toFixed(2)}` : 'PRECIO NO DISPONIBLE'}
         </div>
       </div>
 
       {/* Chart Panel */}
       <div className="win95-panel p-3 space-y-2">
-        <PriceChart candles={candles} height={340} />
+        {unavailable ? (
+          <div className="win95-inset min-h-[340px] bg-white flex items-center justify-center p-6 text-center font-mono text-xs font-bold text-[#cc0000]">
+            Datos de mercado no disponibles para {symbol}.
+          </div>
+        ) : (
+          <PriceChart candles={candles} height={340} loading={loading} symbol={symbol} />
+        )}
 
         {/* Timeframe Buttons */}
         <div className="grid grid-cols-4 gap-2 pt-2">
@@ -71,63 +99,33 @@ export const MarketView: React.FC = () => {
           ))}
         </div>
 
-        <button className="win95-button w-full py-2 text-xs font-bold flex items-center justify-center gap-1.5">
+        <button disabled={!signal || unavailable} className="win95-button w-full py-2 text-xs font-bold flex items-center justify-center gap-1.5 disabled:text-[#808080]">
           <Zap className="h-3.5 w-3.5 fill-current" />
           <span>Copy trade</span>
         </button>
       </div>
 
-      {/* Signal Confidence Card */}
       <div className="win95-panel p-3 space-y-2">
-        <div className="win95-inset bg-white p-2 text-center font-bold text-xs font-mono text-[#008000]">
-          LONG AI signal · {timeframe} · R:R 1:3
+        <div className={`win95-inset bg-white p-2 text-center font-bold text-xs font-mono ${signal ? 'text-[#008000]' : 'text-[#808080]'}`}>
+          {signal ? `${signal.action || signal.type} · ${timeframe}` : 'SEÑAL NO DISPONIBLE'}
         </div>
 
         <div className="win95-inset bg-white p-2 text-center font-bold text-xs font-mono">
-          confidence 60%
+          CONFIANZA NO DISPONIBLE
         </div>
 
-        {/* Signal Levels Table */}
         <div className="win95-inset bg-white p-2 font-mono text-xs space-y-1.5 divide-y divide-[#e5e5e5]">
           <div className="flex justify-between items-center pt-1">
             <span className="text-[#808080]">Entry</span>
-            <span className="font-bold">${ticker?.last ? ticker.last.toFixed(2) : '65,191.30'}</span>
+            <span className="font-bold">{signal ? `$${signal.price.toFixed(2)}` : 'NO DISPONIBLE'}</span>
           </div>
           <div className="flex justify-between items-center pt-1">
             <span className="text-[#808080]">Stop</span>
-            <div className="text-right">
-              <div className="font-bold text-[#cc0000]">
-                ${ticker?.last ? (ticker.last * 0.98).toFixed(2) : '64,831.20'}
-              </div>
-              <div className="text-[10px] text-[#cc0000]">-0.55%</div>
-            </div>
+            <span className="font-bold">NO DISPONIBLE</span>
           </div>
           <div className="flex justify-between items-center pt-1">
-            <span className="text-[#808080]">Take 1</span>
-            <div className="text-right">
-              <div className="font-bold text-[#008000]">
-                ${ticker?.last ? (ticker.last * 1.02).toFixed(2) : '65,551.40'}
-              </div>
-              <div className="text-[10px] text-[#008000]">+0.55%</div>
-            </div>
-          </div>
-          <div className="flex justify-between items-center pt-1">
-            <span className="text-[#808080]">Take 2</span>
-            <div className="text-right">
-              <div className="font-bold text-[#008000]">
-                ${ticker?.last ? (ticker.last * 1.04).toFixed(2) : '65,911.00'}
-              </div>
-              <div className="text-[10px] text-[#008000]">+1.1%</div>
-            </div>
-          </div>
-          <div className="flex justify-between items-center pt-1">
-            <span className="text-[#808080]">Take 3</span>
-            <div className="text-right">
-              <div className="font-bold text-[#008000]">
-                ${ticker?.last ? (ticker.last * 1.06).toFixed(2) : '66,272.00'}
-              </div>
-              <div className="text-[10px] text-[#008000]">+1.65%</div>
-            </div>
+            <span className="text-[#808080]">Take profit</span>
+            <span className="font-bold">NO DISPONIBLE</span>
           </div>
         </div>
       </div>

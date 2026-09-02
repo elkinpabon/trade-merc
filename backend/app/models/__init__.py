@@ -1,5 +1,5 @@
 from app.models.exchange import Exchange, ExchangeSettings, ExchangeCredentials
-from app.models.bot import BotConfig, BotRun
+from app.models.bot import BotConfig, BotRun, WorkerCycle
 from app.models.symbol import Symbol, SymbolRule
 from app.models.candle import Candle
 from app.models.signal import Signal
@@ -17,6 +17,7 @@ __all__ = [
     'ExchangeCredentials',
     'BotConfig',
     'BotRun',
+    'WorkerCycle',
     'Symbol',
     'SymbolRule',
     'Candle',

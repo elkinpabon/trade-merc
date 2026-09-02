@@ -1,5 +1,5 @@
 import numpy as np
-from app.models import Trade, PortfolioSnapshot, StrategyMetric
+from app.models import Trade, PortfolioSnapshot, RunDailyMetric, StrategyRun
 from app.utils.helpers import round_price
 
 class AnalyticsService:
@@ -10,8 +10,15 @@ class AnalyticsService:
 
     @staticmethod
     def calculate_metrics() -> dict:
-        trades = Trade.query.order_by(Trade.closed_at.asc()).all()
-        snapshots = PortfolioSnapshot.query.order_by(PortfolioSnapshot.timestamp.asc()).all()
+        experiment = StrategyRun.query.filter_by(run_type='EXPERIMENT').order_by(
+            StrategyRun.started_at.desc()).first()
+        trade_query = Trade.query
+        snapshot_query = PortfolioSnapshot.query
+        if experiment:
+            trade_query = trade_query.filter_by(strategy_run_id=experiment.id)
+            snapshot_query = snapshot_query.filter_by(strategy_run_id=experiment.id)
+        trades = trade_query.order_by(Trade.closed_at.asc()).all()
+        snapshots = snapshot_query.order_by(PortfolioSnapshot.timestamp.asc()).all()
 
         total_trades = len(trades)
         winning_trades = [t for t in trades if t.realized_pnl > 0]
@@ -25,12 +32,13 @@ class AnalyticsService:
 
         total_pnl = sum(t.realized_pnl for t in trades)
 
-        # Sharpe ratio estimation from trade returns
-        returns = [t.realized_pnl_pct for t in trades]
+        daily_metrics = (RunDailyMetric.query.filter_by(run_id=experiment.id)
+                         .order_by(RunDailyMetric.metric_date.asc()).all()) if experiment else []
+        returns = [metric.daily_return_pct for metric in daily_metrics]
         if len(returns) > 1:
             mean_ret = np.mean(returns)
             std_ret = np.std(returns, ddof=1)
-            sharpe = (mean_ret / std_ret * np.sqrt(252)) if std_ret > 0 else 0.0
+            sharpe = (mean_ret / std_ret * np.sqrt(365)) if std_ret > 0 else 0.0
         else:
             sharpe = 0.0
 
@@ -73,5 +81,6 @@ class AnalyticsService:
                 "sharpe_ratio": round_price(sharpe, 2)
             },
             "equity_curve": equity_curve,
-            "symbol_breakdown": symbol_breakdown
+            "symbol_breakdown": symbol_breakdown,
+            "experiment": experiment.to_dict() if experiment else None,
         }

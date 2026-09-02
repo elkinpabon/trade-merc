@@ -9,6 +9,7 @@ export const LogsView: React.FC = () => {
   const [logs, setLogs] = useState<BotLogData[]>([]);
   const [health, setHealth] = useState<SystemHealthData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { socket } = useSocket();
 
   const loadData = async () => {
@@ -18,8 +19,10 @@ export const LogsView: React.FC = () => {
       setLogs(logData);
       const hData = await api.getHealth();
       setHealth(hData);
+      setError(null);
     } catch (err) {
       console.error('Error al cargar diagnóstico:', err);
+      setError('No se pudieron consultar los logs o el estado del sistema.');
     } finally {
       setLoading(false);
     }
@@ -57,8 +60,10 @@ export const LogsView: React.FC = () => {
           </button>
         </div>
 
+        {error && <div className="win95-inset bg-white p-2 text-xs font-mono font-bold text-[#cc0000]">{error}</div>}
+
         <div className="win95-inset bg-white p-3 font-mono text-xs h-[380px] overflow-y-auto space-y-1">
-          {logs.length > 0 ? (
+          {!error && logs.length > 0 ? (
             logs.map((l, idx) => (
               <div key={idx} className="flex items-start gap-2 border-b border-[#e5e5e5] pb-1 text-[11px]">
                 <span className="text-[#808080] shrink-0">{new Date(l.timestamp).toLocaleTimeString()}</span>
@@ -80,7 +85,7 @@ export const LogsView: React.FC = () => {
               </div>
             ))
           ) : (
-            <div className="text-[#808080] text-center py-12">No hay registros de eventos disponibles.</div>
+            <div className="text-[#808080] text-center py-12">{error || 'No hay registros de eventos disponibles.'}</div>
           )}
         </div>
       </div>

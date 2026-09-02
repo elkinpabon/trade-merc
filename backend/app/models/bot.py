@@ -75,3 +75,18 @@ class BotRun(db.Model):
             "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
             "error_message": self.error_message,
         }
+
+
+class WorkerCycle(db.Model):
+    __tablename__ = 'worker_cycles'
+
+    id = db.Column(db.String(64), primary_key=True)
+    bot_run_id = db.Column(db.String(64), db.ForeignKey('bot_runs.id'), nullable=False, index=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    status = db.Column(db.String(20), nullable=False, default='RUNNING')
+    expected_symbols = db.Column(db.Integer, nullable=False, default=0)
+    received_symbols = db.Column(db.Integer, nullable=False, default=0)
+    processed_symbols = db.Column(db.Integer, nullable=False, default=0)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)

@@ -5,6 +5,9 @@ class Trade(db.Model):
     __tablename__ = 'trades'
 
     id = db.Column(db.String(64), primary_key=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    model_version_id = db.Column(db.String(64), db.ForeignKey('model_versions.id'), nullable=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('bot_configs.id'), nullable=True)
     symbol = db.Column(db.String(32), nullable=False)
     side = db.Column(db.String(10), default='LONG')
     entry_order_id = db.Column(db.String(64), nullable=True)
@@ -22,6 +25,9 @@ class Trade(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "strategy_run_id": self.strategy_run_id,
+            "model_version_id": self.model_version_id,
+            "config_id": self.config_id,
             "symbol": self.symbol,
             "side": self.side,
             "entry_order_id": self.entry_order_id,

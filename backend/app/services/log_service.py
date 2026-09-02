@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models import BotLog
 from app.utils.helpers import utc_now
+from datetime import timedelta
 
 class LogService:
     """
@@ -28,3 +29,10 @@ class LogService:
             query = query.filter_by(level=level.upper())
         logs = query.order_by(BotLog.timestamp.desc()).limit(limit).all()
         return [l.to_dict() for l in logs]
+
+    @staticmethod
+    def prune(retention_days: int = 90) -> int:
+        cutoff = utc_now() - timedelta(days=retention_days)
+        deleted = BotLog.query.filter(BotLog.timestamp < cutoff).delete(synchronize_session=False)
+        db.session.commit()
+        return deleted

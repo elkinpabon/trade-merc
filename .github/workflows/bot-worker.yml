@@ -20,7 +20,9 @@ concurrency:
 
 jobs:
   run-bot-scan:
+    if: github.event_name == 'schedule' || inputs.research_mode == 'cycle' || inputs.research_mode == ''
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -43,8 +45,6 @@ jobs:
           DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
           DB_PORT: '4000'
           DB_NAME: 'trademerc_db'
-          RESEARCH_MODE: ${{ inputs.research_mode || 'cycle' }}
-          RESEARCH_DAYS: ${{ inputs.research_days || '30' }}
         run: |
           python - <<'PY'
           import os
@@ -55,14 +55,40 @@ jobs:
           from app import create_app
           from worker.bot_runner import run_bot_loop
 
-          mode = os.environ['RESEARCH_MODE']
-          if mode == 'cycle':
-              print('Executing one automated paper-trading cycle...')
-              if not run_bot_loop(create_app(), max_cycles=1):
-                  raise SystemExit('No public market data was received; failing the cycle.')
-              print('Paper-trading cycle finished cleanly.')
-          else:
-              from scripts.run_research import main
-              sys.argv = ['run_research.py', mode, '--days', os.environ['RESEARCH_DAYS']]
-              main()
+          print('Executing one automated paper-trading cycle...')
+          if not run_bot_loop(create_app(), max_cycles=1):
+              raise SystemExit('The paper-trading cycle did not complete with full coverage.')
+          print('Paper-trading cycle finished cleanly.')
           PY
+
+  run-research:
+    if: github.event_name == 'workflow_dispatch' && inputs.research_mode != 'cycle' && inputs.research_mode != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run manual research task
+        env:
+          DB_USER: '3RWNAdLev5dv3er.root'
+          DB_PASSWORD: 'VSGF3kkVfo4CEIu9'
+          DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
+          DB_PORT: '4000'
+          DB_NAME: 'trademerc_db'
+          RESEARCH_MODE: ${{ inputs.research_mode }}
+          RESEARCH_DAYS: ${{ inputs.research_days || '30' }}
+        run: |
+          cd backend
+          python -m scripts.run_research "$RESEARCH_MODE" --days "$RESEARCH_DAYS"

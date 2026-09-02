@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '@/lib/api';
-import { TrendingUp, Play, Square, Terminal, Award } from 'lucide-react';
+import { TrendingUp, Terminal, Award } from 'lucide-react';
 
 export const PolymarketView: React.FC = () => {
   const [category, setCategory] = useState<string>('ALL');
@@ -10,85 +10,52 @@ export const PolymarketView: React.FC = () => {
   const [positions, setPositions] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
-  const [isBotRunning, setIsBotRunning] = useState<boolean>(true);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [isBotRunning, setIsBotRunning] = useState<boolean>(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [gammaAvailable, setGammaAvailable] = useState<boolean | null>(null);
+  const [availabilityMessage, setAvailabilityMessage] = useState('Verificando infraestructura de Polymarket...');
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  const loadData = async () => {
-    try {
-      const [mktsRes, posRes, anaRes, statusRes] = await Promise.all([
-        api.getPolymarketMarkets(category),
-        api.getPolymarketPositions(),
-        api.getPolymarketAnalytics(),
-        api.getPolymarketBotStatus()
-      ]);
+  const loadData = async (cancelled: () => boolean) => {
+    const [marketsResult, statusResult, positionsResult, analyticsResult, logsResult] = await Promise.allSettled([
+      api.getPolymarketMarkets(category),
+      api.getPolymarketBotStatus(),
+      api.getPolymarketPositions(),
+      api.getPolymarketAnalytics(),
+      api.getPolymarketLiveLogs(),
+    ]);
+    if (cancelled()) return;
 
-      if (mktsRes?.markets) setMarkets(mktsRes.markets);
-      if (posRes) setPositions(posRes);
-      if (anaRes) setAnalytics(anaRes);
-      if (statusRes) setIsBotRunning(statusRes.is_running);
-    } catch (err) {
-      console.error('Error loading Polymarket data:', err);
+    if (marketsResult.status === 'fulfilled') {
+      setMarkets(marketsResult.value.markets || []);
+      setGammaAvailable(true);
+    } else {
+      console.error('Polymarket Gamma feed unavailable:', marketsResult.reason);
+      setMarkets([]);
+      setGammaAvailable(false);
     }
-  };
 
-  const fetchLiveLogs = async () => {
-    try {
-      const res = await api.getPolymarketLiveLogs();
-      if (res?.logs && res.logs.length > 0) {
-        setLiveLogs(res.logs);
-      }
-    } catch (err) {
-      console.warn('Error fetching Polymarket live logs:', err);
-    }
+    const infrastructureAvailable = statusResult.status === 'fulfilled' && statusResult.value.available;
+    setAvailable(infrastructureAvailable);
+    setIsBotRunning(infrastructureAvailable ? statusResult.value.is_running : false);
+    setAvailabilityMessage(infrastructureAvailable
+      ? 'Infraestructura opcional disponible.'
+      : 'Infraestructura opcional de bot, ejecución y persistencia no disponible.');
+    setPositions(infrastructureAvailable && positionsResult.status === 'fulfilled' ? positionsResult.value : []);
+    setAnalytics(infrastructureAvailable && analyticsResult.status === 'fulfilled' ? analyticsResult.value : null);
+    setLiveLogs(infrastructureAvailable && logsResult.status === 'fulfilled' ? logsResult.value.logs || [] : []);
   };
 
   useEffect(() => {
-    loadData();
-    fetchLiveLogs();
-    const interval = setInterval(() => {
-      fetchLiveLogs();
-      loadData();
-    }, 2000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    const refresh = () => loadData(() => cancelled);
+    refresh();
+    const interval = setInterval(refresh, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [category]);
-
-  const toggleBot = async () => {
-    setLoading(true);
-    try {
-      if (isBotRunning) {
-        await api.stopBot();
-        setIsBotRunning(false);
-        setActionMsg('Bot de Polymarket Pausado.');
-      } else {
-        await api.startBot();
-        setIsBotRunning(true);
-        setActionMsg('Bot de Polymarket Activado.');
-      }
-    } catch (err: any) {
-      setActionMsg(`Error: ${err?.message}`);
-    } finally {
-      setLoading(false);
-      setTimeout(() => setActionMsg(null), 3000);
-    }
-  };
-
-  const buyContract = async (question: string, outcome: string, contractPrice: number, cExecWeighted?: number, pModel?: number, takerFeePct?: number) => {
-    setLoading(true);
-    try {
-      const res = await api.buyPolymarketContract(question, outcome, contractPrice, 50.0, cExecWeighted, pModel, takerFeePct);
-      if (res.success) {
-        setActionMsg(`Contrato L2 Llenado: ${outcome} en "${question}" (c_exec_w=$${(cExecWeighted || contractPrice).toFixed(3)})`);
-        loadData();
-      }
-    } catch (err: any) {
-      setActionMsg(`Error de compra: ${err?.message}`);
-    } finally {
-      setLoading(false);
-      setTimeout(() => setActionMsg(null), 3000);
-    }
-  };
 
   const categories = [
     { id: 'ALL', label: 'TODOS LOS MERCADOS' },
@@ -108,43 +75,37 @@ export const PolymarketView: React.FC = () => {
             <span className="font-bold text-xs font-mono">POLYMARKET</span>
           </div>
           <span className="text-emerald-300 font-mono text-[9px] sm:text-[11px] font-bold truncate max-w-full">
-            RED: POLYGON CLOB & GAMMA API · ONLINE
+             FEED GAMMA: {gammaAvailable === null ? 'VERIFICANDO' : gammaAvailable ? 'DISPONIBLE' : 'NO DISPONIBLE'} · DATOS REALES
           </span>
         </div>
 
         <div className="p-2 bg-[#c0c0c0] flex flex-wrap items-center justify-between gap-2 border-b border-[#808080]">
           <div className="flex items-center gap-2">
-            <button
-              onClick={toggleBot}
-              disabled={loading}
-              className={`win95-button px-4 py-1.5 text-xs font-bold font-mono flex items-center gap-1.5 ${
-                isBotRunning ? 'bg-[#cc0000] text-white' : 'bg-[#008000] text-white'
-              }`}
-            >
-              {isBotRunning ? <Square className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-              <span>{loading ? 'PROCESANDO...' : isBotRunning ? 'PAUSAR BOT POLYMARKET' : 'ACTIVAR BOT POLYMARKET'}</span>
-            </button>
+            <span className={`win95-button px-4 py-1.5 text-xs font-bold font-mono ${isBotRunning ? 'text-[#008000]' : 'text-[#808080]'}`}>
+              BOT: {available === null ? 'VERIFICANDO' : available ? (isBotRunning ? 'ACTIVO EN DB' : 'DETENIDO') : 'NO DISPONIBLE'}
+            </span>
 
             <span className="text-xs font-mono text-black font-bold px-2 py-1 win95-inset bg-white">
-              MODO: SIMULACIÓN (+EV)
+               MODO: SOLO LECTURA
             </span>
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono">
             <span className="win95-inset px-2 py-1 bg-white font-bold text-[#000080]">
-              SALDO: ${analytics?.virtual_balance?.toFixed(2) || '1,000.00'} USD
+               PNL REALIZADO: ${analytics?.realized_pnl?.toFixed(2) ?? '--'} USD
             </span>
             <span className="win95-inset px-2 py-1 bg-white font-bold text-[#008000]">
-              ACIERTO: {analytics?.prediction_win_rate_pct || 78.5}%
+               ACIERTO: {analytics?.prediction_win_rate_pct?.toFixed(1) ?? '--'}%
             </span>
           </div>
         </div>
 
-        {actionMsg && (
-          <div className="m-2 p-2 win95-inset bg-white font-mono text-xs text-[#008000] font-bold text-center">
-            {actionMsg}
+        {available === false && (
+          <div className="m-2 win95-inset bg-white p-2 text-center text-xs font-mono text-[#808080]">
+            {availabilityMessage} El feed Gamma funciona de forma independiente.
           </div>
         )}
+
       </div>
 
       {/* Category Tabs & Stats Bar */}
@@ -188,14 +149,9 @@ export const PolymarketView: React.FC = () => {
             <div className="p-2 space-y-3 max-h-[500px] overflow-y-auto bg-[#c0c0c0]">
               {markets.length > 0 ? (
                 markets.map((m) => {
-                  const yesPrice = m.prices ? m.prices[0] : 0.5;
-                  const noPrice = m.prices ? m.prices[1] : 0.5;
+                  const yesPrice = m.prices[0];
+                  const noPrice = m.prices[1];
                   const yesProb = Math.round(yesPrice * 100);
-
-                  const cExecBest = m.c_exec || (m.best_price ? m.best_price + 0.005 : 0.5);
-                  const evNetPct = m.ev_net ? (m.ev_net * 100).toFixed(1) : (m.ev_pct || 8.0);
-                  const spreadPct = m.spread ? (m.spread * 100).toFixed(2) : '0.50';
-                  const kellySize = Math.min(25, Math.max(10, Math.round(parseFloat(evNetPct || '10') * 1.8)));
 
                   return (
                     <div key={m.id} className="win95-panel p-3 bg-white space-y-2 border border-[#404040]">
@@ -208,7 +164,7 @@ export const PolymarketView: React.FC = () => {
                         </div>
                         <div className="text-left sm:text-right font-mono shrink-0">
                           <span className="text-xs font-bold text-[#000080] bg-[#e6f0ff] px-2 py-0.5 border border-[#000080] rounded-sm inline-block">
-                            NET EV: +{evNetPct}% | c_exec: ${cExecBest.toFixed(3)}
+                            LIQUIDEZ: ${Number(m.liquidity).toLocaleString()}
                           </span>
                         </div>
                       </div>
@@ -230,34 +186,17 @@ export const PolymarketView: React.FC = () => {
                         <div className="text-[10px] text-[#808080] space-x-1">
                           <span>Vol: <strong className="text-black">${(m.volume / 1000).toFixed(1)}k</strong></span>
                           <span>·</span>
-                          <span>Spread: <strong className="text-black">{spreadPct}%</strong></span>
-                          <span>·</span>
-                          <span>Kelly: <strong className="text-[#000080]">${kellySize}.00 USD</strong></span>
+                          <span>Fuente: <strong className="text-black">Gamma API</strong></span>
                         </div>
 
-                        <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
-                          <button
-                            onClick={() => buyContract(m.question, 'YES', yesPrice)}
-                            disabled={loading}
-                            className="win95-button px-3 py-1 text-xs font-bold bg-[#008000] text-white hover:bg-[#009900] flex-1 sm:flex-initial"
-                          >
-                            COMPRAR YES (${yesPrice.toFixed(2)})
-                          </button>
-                          <button
-                            onClick={() => buyContract(m.question, 'NO', noPrice)}
-                            disabled={loading}
-                            className="win95-button px-3 py-1 text-xs font-bold bg-[#cc0000] text-white hover:bg-[#ee0000] flex-1 sm:flex-initial"
-                          >
-                            COMPRAR NO (${noPrice.toFixed(2)})
-                          </button>
-                        </div>
+                        <span className="win95-button px-3 py-1 text-[10px] font-bold text-[#808080]">EJECUCIÓN NO DISPONIBLE</span>
                       </div>
                     </div>
                   );
                 })
               ) : (
                 <div className="win95-inset bg-white p-6 text-center text-xs font-mono text-[#808080]">
-                  Escaneando mercados de Polymarket en tiempo real...
+                  {gammaAvailable === false ? 'Feed Gamma no disponible.' : 'No hay mercados reportados por Polymarket.'}
                 </div>
               )}
             </div>
@@ -272,7 +211,7 @@ export const PolymarketView: React.FC = () => {
                 <Terminal className="h-3.5 w-3.5 text-white shrink-0" />
                 <span className="truncate">CONSOLA POLYMARKET</span>
               </div>
-              <span className="animate-pulse text-[#00ff00] font-bold text-[10px] shrink-0">ESCANEANDO</span>
+              <span className="text-[#c0c0c0] font-bold text-[10px] shrink-0">SOLO LECTURA</span>
             </div>
 
             <div className="win95-inset bg-white p-3 font-mono text-xs text-black h-[480px] overflow-y-auto space-y-1">
@@ -297,8 +236,8 @@ export const PolymarketView: React.FC = () => {
                   );
                 })
               ) : (
-                <div className="text-[#007a3d] font-mono animate-pulse">
-                  Calculando algoritmo de Valor Esperado (+EV) y Criterio de Kelly en Polymarket...
+                <div className="text-[#808080] font-mono">
+                  {available === false ? 'Módulo opcional de logs no disponible.' : 'No hay logs registrados en la infraestructura de Polymarket.'}
                 </div>
               )}
               <div ref={logsEndRef} />
@@ -357,7 +296,7 @@ export const PolymarketView: React.FC = () => {
           </div>
         ) : (
           <div className="win95-inset bg-white p-6 text-center text-xs font-mono text-[#808080]">
-            No hay posiciones activas en Polymarket. El bot está escaneando los mercados para ejecutar la siguiente compra de contrato +EV.
+            {available === false ? 'Módulo opcional de posiciones no disponible.' : 'No hay posiciones activas registradas en Polymarket.'}
           </div>
         )}
       </div>

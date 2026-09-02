@@ -5,6 +5,9 @@ class PortfolioSnapshot(db.Model):
     __tablename__ = 'portfolio_snapshots'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    model_version_id = db.Column(db.String(64), db.ForeignKey('model_versions.id'), nullable=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('bot_configs.id'), nullable=True)
     cash_balance = db.Column(db.Float, nullable=False)
     positions_value = db.Column(db.Float, nullable=False)
     total_equity = db.Column(db.Float, nullable=False)
@@ -17,6 +20,9 @@ class PortfolioSnapshot(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "strategy_run_id": self.strategy_run_id,
+            "model_version_id": self.model_version_id,
+            "config_id": self.config_id,
             "cash_balance": float(self.cash_balance),
             "positions_value": float(self.positions_value),
             "total_equity": float(self.total_equity),

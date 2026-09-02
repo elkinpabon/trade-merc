@@ -1,6 +1,7 @@
 from app.extensions import db
 from app.models import PortfolioSnapshot, PaperPosition, Trade, BotConfig
 from app.utils.helpers import round_price, utc_now
+from app.services.experiment_service import ExperimentService
 
 class PortfolioService:
     """
@@ -12,12 +13,20 @@ class PortfolioService:
         self.config = config
 
     def get_summary(self) -> dict:
-        latest = PortfolioSnapshot.query.order_by(PortfolioSnapshot.id.desc()).first()
-        open_positions = PaperPosition.query.filter_by(is_open=True).all()
-        recent_trades = Trade.query.order_by(Trade.closed_at.desc()).limit(10).all()
+        attribution = ExperimentService.attribution(self.config.id)
+        snapshot_query = PortfolioSnapshot.query
+        position_query = PaperPosition.query.filter_by(is_open=True)
+        trade_query = Trade.query
+        if attribution['strategy_run_id']:
+            snapshot_query = snapshot_query.filter_by(strategy_run_id=attribution['strategy_run_id'])
+            position_query = position_query.filter_by(strategy_run_id=attribution['strategy_run_id'])
+            trade_query = trade_query.filter_by(strategy_run_id=attribution['strategy_run_id'])
+        latest = snapshot_query.order_by(PortfolioSnapshot.id.desc()).first()
+        open_positions = position_query.all()
+        recent_trades = trade_query.order_by(Trade.closed_at.desc()).limit(10).all()
 
-        total_trades_count = Trade.query.count()
-        winning_trades = Trade.query.filter(Trade.realized_pnl > 0).count()
+        total_trades_count = trade_query.count()
+        winning_trades = trade_query.filter(Trade.realized_pnl > 0).count()
         win_rate = (winning_trades / total_trades_count * 100.0) if total_trades_count > 0 else 0.0
 
         if not latest:
@@ -53,7 +62,11 @@ class PortfolioService:
 
     def update_valuation(self, symbol_prices: dict[str, float]) -> PortfolioSnapshot:
         """Recalculates portfolio equity given current market prices and returns updated snapshot."""
-        latest = PortfolioSnapshot.query.order_by(PortfolioSnapshot.id.desc()).first()
+        attribution = ExperimentService.attribution(self.config.id)
+        snapshot_query = PortfolioSnapshot.query
+        if attribution['strategy_run_id']:
+            snapshot_query = snapshot_query.filter_by(strategy_run_id=attribution['strategy_run_id'])
+        latest = snapshot_query.order_by(PortfolioSnapshot.id.desc()).first()
         cash = latest.cash_balance if latest else self.config.virtual_balance
         prev_peak = latest.peak_equity if latest else self.config.virtual_balance
 
@@ -73,11 +86,15 @@ class PortfolioService:
             unrealized += p.unrealized_pnl
 
         total_equity = cash + pos_val
-        realized = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0)).scalar()
+        realized_query = db.session.query(db.func.coalesce(db.func.sum(Trade.realized_pnl), 0.0))
+        if attribution['strategy_run_id']:
+            realized_query = realized_query.filter(Trade.strategy_run_id == attribution['strategy_run_id'])
+        realized = realized_query.scalar()
         peak = max(prev_peak, total_equity)
         drawdown = ((peak - total_equity) / peak * 100.0) if peak > 0 else 0.0
 
         snapshot = PortfolioSnapshot(
+            **attribution,
             cash_balance=round_price(cash, 2),
             positions_value=round_price(pos_val, 2),
             total_equity=round_price(total_equity, 2),

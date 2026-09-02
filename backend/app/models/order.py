@@ -5,7 +5,10 @@ class PaperOrder(db.Model):
     __tablename__ = 'paper_orders'
 
     id = db.Column(db.String(64), primary_key=True)
-    signal_id = db.Column(db.String(64), nullable=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    model_version_id = db.Column(db.String(64), db.ForeignKey('model_versions.id'), nullable=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('bot_configs.id'), nullable=True)
+    signal_id = db.Column(db.String(64), nullable=True, unique=True)
     symbol = db.Column(db.String(32), nullable=False)
     side = db.Column(db.String(10), nullable=False) # BUY / SELL
     type = db.Column(db.String(10), nullable=False) # MARKET / LIMIT
@@ -21,6 +24,9 @@ class PaperOrder(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "strategy_run_id": self.strategy_run_id,
+            "model_version_id": self.model_version_id,
+            "config_id": self.config_id,
             "signal_id": self.signal_id,
             "symbol": self.symbol,
             "side": self.side,
@@ -38,6 +44,9 @@ class PaperFill(db.Model):
     __tablename__ = 'paper_fills'
 
     id = db.Column(db.String(64), primary_key=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    model_version_id = db.Column(db.String(64), db.ForeignKey('model_versions.id'), nullable=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('bot_configs.id'), nullable=True)
     order_id = db.Column(db.String(64), db.ForeignKey('paper_orders.id'), nullable=False)
     symbol = db.Column(db.String(32), nullable=False)
     side = db.Column(db.String(10), nullable=False)
@@ -50,6 +59,9 @@ class PaperFill(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "strategy_run_id": self.strategy_run_id,
+            "model_version_id": self.model_version_id,
+            "config_id": self.config_id,
             "order_id": self.order_id,
             "symbol": self.symbol,
             "side": self.side,
@@ -64,6 +76,9 @@ class PaperPosition(db.Model):
     __tablename__ = 'paper_positions'
 
     id = db.Column(db.String(64), primary_key=True)
+    strategy_run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=True, index=True)
+    model_version_id = db.Column(db.String(64), db.ForeignKey('model_versions.id'), nullable=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('bot_configs.id'), nullable=True)
     # A single row is retained per symbol and reset on re-entry so paper
     # history does not violate the unique symbol constraint.
     symbol = db.Column(db.String(32), nullable=False, unique=True)
@@ -84,6 +99,9 @@ class PaperPosition(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "strategy_run_id": self.strategy_run_id,
+            "model_version_id": self.model_version_id,
+            "config_id": self.config_id,
             "symbol": self.symbol,
             "side": self.side,
             "quantity": float(self.quantity),

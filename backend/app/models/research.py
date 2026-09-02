@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 
 from app.extensions import db
+from sqlalchemy import event, inspect
 
 
 class ModelVersion(db.Model):
@@ -83,11 +84,40 @@ class StrategyRun(db.Model):
     symbols_json = db.Column(db.Text, nullable=False)
     timeframe = db.Column(db.String(10), nullable=False)
     parameters_json = db.Column(db.Text, nullable=False)
+    config_snapshot_json = db.Column(db.Text, nullable=False, default='{}')
+    git_commit = db.Column(db.String(64), nullable=False, default='unknown')
     started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    planned_end_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
 
     __table_args__ = (db.Index('idx_strategy_run_type_status', 'run_type', 'status', 'started_at'),)
+
+    def config_snapshot(self):
+        return json.loads(self.config_snapshot_json or '{}')
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'run_type': self.run_type, 'status': self.status,
+            'model_version_id': self.model_version_id, 'config_id': self.config_id,
+            'source_bot_run_id': self.source_bot_run_id,
+            'symbols': json.loads(self.symbols_json or '[]'), 'timeframe': self.timeframe,
+            'parameters': json.loads(self.parameters_json or '{}'),
+            'config_snapshot': self.config_snapshot(), 'git_commit': self.git_commit,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'planned_end_at': self.planned_end_at.isoformat() if self.planned_end_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }
+
+
+@event.listens_for(StrategyRun, 'before_update')
+def prevent_strategy_run_provenance_changes(_mapper, _connection, target):
+    immutable = ('model_version_id', 'config_id', 'symbols_json', 'timeframe',
+                 'parameters_json', 'config_snapshot_json', 'git_commit', 'started_at')
+    state = inspect(target)
+    changed = [name for name in immutable if state.attrs[name].history.has_changes()]
+    if changed:
+        raise ValueError(f"StrategyRun provenance is immutable: {', '.join(changed)}")
 
 
 class BacktestRun(db.Model):
@@ -127,7 +157,7 @@ class BacktestTrade(db.Model):
 class RunDailyMetric(db.Model):
     __tablename__ = 'run_daily_metrics'
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.BigInteger().with_variant(db.Integer, 'sqlite'), primary_key=True, autoincrement=True)
     run_id = db.Column(db.String(64), db.ForeignKey('strategy_runs.id'), nullable=False)
     metric_date = db.Column(db.Date, nullable=False)
     starting_equity = db.Column(db.Float, nullable=False)

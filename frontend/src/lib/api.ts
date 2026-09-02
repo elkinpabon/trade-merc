@@ -9,6 +9,8 @@ import {
   TradeData,
   BotLogData,
   SystemHealthData,
+  AnalyticsOverviewData,
+  ExperimentReportData,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
@@ -45,7 +47,9 @@ async function fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`API Request Error (${res.status}): ${errText}`);
+    const error = new Error(`API Request Error (${res.status}): ${errText}`) as Error & { status: number };
+    error.status = res.status;
+    throw error;
   }
 
   return res.json();
@@ -59,7 +63,7 @@ export const api = {
     }),
   verifyAuth: () => fetcher<{ valid: boolean }>('/auth/verify'),
   getHealth: () => fetcher<SystemHealthData>('/health'),
-  getBotStatus: () => fetcher<{ is_running: boolean; mode: string; config: BotConfigData }>('/bot/status'),
+  getBotStatus: () => fetcher<{ is_running: boolean; mode: string | null; config: BotConfigData | null }>('/bot/status'),
   startBot: () => fetcher<{ success: boolean; message: string }>('/bot/start', { method: 'POST' }),
   stopBot: () => fetcher<{ success: boolean; message: string }>('/bot/stop', { method: 'POST' }),
   getConfig: () => fetcher<BotConfigData>('/config'),
@@ -84,15 +88,16 @@ export const api = {
   getCandles: async (symbol: string = 'BTC/USDT', timeframe: string = '5m', limit: number = 100): Promise<CandleData[]> => {
     const cleanSym = symbol.replace('/', '').replace('%2F', '').replace('%2f', '').toUpperCase();
     const cleanSymbol = cleanSym.endsWith('USDT') ? cleanSym : `${cleanSym}USDT`;
+    const binanceTimeframe = timeframe === '1D' ? '1d' : timeframe;
 
     try {
       // Direct ultra-fast Binance REST fetch (<100ms)
-      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${timeframe}&limit=${limit}`);
+      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=${binanceTimeframe}&limit=${limit}`);
       if (res.ok) {
         const raw = await res.json();
         return raw.map((c: any) => ({
           symbol,
-          timeframe,
+          timeframe: binanceTimeframe,
           timestamp: c[0],
           datetime: new Date(c[0]).toISOString(),
           open: parseFloat(c[1]),
@@ -103,15 +108,10 @@ export const api = {
         }));
       }
     } catch (err) {
-      console.warn("Direct Binance client fetch notice, using fallback backend endpoint:", err);
+      console.warn('Direct Binance candle request failed:', err);
     }
 
-    try {
-      return await fetcher<CandleData[]>(`/market/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${limit}`);
-    } catch (fallbackErr) {
-      console.error("Candles fallback error:", fallbackErr);
-      return [];
-    }
+    throw new Error(`Binance candles are unavailable for ${cleanSymbol}`);
   },
 
   getTicker: (symbol: string) =>
@@ -126,8 +126,13 @@ export const api = {
   getLogs: (limit?: number) => fetcher<BotLogData[]>(`/logs${limit ? `?limit=${limit}` : ''}`),
   getLiveLogs: () => fetcher<{ logs: any[] }>('/bot/live-logs'),
   getMarketScanner: () => fetcher<{ total_markets: number; markets: any[] }>('/market/scanner'),
-  getAnalyticsOverview: () => fetcher<any>('/analytics/overview'),
-  getAnalytics: () => fetcher<any>('/analytics/overview'),
+  getAnalyticsOverview: () => fetcher<AnalyticsOverviewData>('/analytics/overview'),
+  getAnalytics: () => fetcher<AnalyticsOverviewData>('/analytics/overview'),
+  getCurrentExperimentReport: () =>
+    fetcher<ExperimentReportData>('/experiments/current/report').catch((error: Error & { status?: number }) => {
+      if (error.status === 404) return null;
+      throw error;
+    }),
   getExchangeSettings: () => fetcher<any>('/exchange/settings'),
   updateExchangeSettings: (data: any) =>
     fetcher<{ success: boolean; message: string }>('/exchange/settings', {
@@ -151,7 +156,7 @@ export const api = {
       body: JSON.stringify({ question, outcome, contract_price, cost, c_exec_weighted, p_model, taker_fee_pct })
     }),
   getPolymarketLiveLogs: () => fetcher<{ logs: any[] }>('/polymarket/bot/logs'),
-  getPolymarketBotStatus: () => fetcher<{ is_running: boolean; mode: string }>('/polymarket/bot/status'),
+  getPolymarketBotStatus: () => fetcher<{ available: boolean; is_running: boolean; mode: string | null }>('/polymarket/bot/status'),
   startPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/start', { method: 'POST' }),
   stopPolymarketBot: () => fetcher<{ success: boolean; message: string }>('/polymarket/bot/stop', { method: 'POST' }),
   getPolymarketAnalytics: () => fetcher<any>('/polymarket/analytics'),

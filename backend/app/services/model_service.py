@@ -27,7 +27,7 @@ class ModelService:
         baseline = ModelVersion(
             id=generate_uuid(), model_name='multifactor', version='baseline-v1', status='active',
             algorithm='heuristic_baseline', feature_schema_json=json.dumps(FEATURE_NAMES),
-            parameters_json=json.dumps({'cost_pct': 0.002, 'entry_probability': 0.60}),
+            parameters_json=json.dumps({'entry_probability': 0.60}),
             metrics_json=json.dumps({'source': 'initial baseline'}), created_at=utc_now(),
         )
         db.session.add(baseline)
@@ -79,18 +79,23 @@ class ModelService:
         x = np.array([[float(e.features().get(name, 0.0)) for name in FEATURE_NAMES] for e in evaluations], dtype=float)
         y = np.array([1.0 if e.label == 'TP_HIT' else 0.0 for e in evaluations], dtype=float)
         split = max(1, int(len(evaluations) * 0.8))
-        if len(np.unique(y[:split])) < 2:
+        validation_start = evaluations[split].decision_at if split < len(evaluations) else None
+        train_indices = [
+            index for index, evaluation in enumerate(evaluations[:split])
+            if not validation_start or (evaluation.label_at and evaluation.label_at < validation_start)
+        ]
+        if len(train_indices) < minimum_samples or len(np.unique(y[train_indices])) < 2:
             return None
-        means = x[:split].mean(axis=0)
-        scales = x[:split].std(axis=0)
+        means = x[train_indices].mean(axis=0)
+        scales = x[train_indices].std(axis=0)
         scales[scales == 0] = 1.0
-        x_train = (x[:split] - means) / scales
+        x_train = (x[train_indices] - means) / scales
         weights = np.zeros(len(FEATURE_NAMES), dtype=float)
         intercept = 0.0
         for _ in range(400):
             logits = np.clip(x_train @ weights + intercept, -30, 30)
             probabilities = 1.0 / (1.0 + np.exp(-logits))
-            error = probabilities - y[:split]
+            error = probabilities - y[train_indices]
             weights -= 0.08 * ((x_train.T @ error) / len(x_train) + 0.001 * weights)
             intercept -= 0.08 * float(error.mean())
 
@@ -99,7 +104,9 @@ class ModelService:
         validation_p = 1.0 / (1.0 + np.exp(-np.clip(validation_x @ weights + intercept, -30, 30)))
         brier = float(np.mean((validation_p - validation_y) ** 2)) if len(validation_y) else 1.0
         log_loss = float(-np.mean(validation_y * np.log(np.clip(validation_p, 1e-9, 1)) + (1 - validation_y) * np.log(np.clip(1 - validation_p, 1e-9, 1)))) if len(validation_y) else 1.0
-        if brier > 0.25:
+        base_rate = float(np.mean(y[train_indices]))
+        baseline_brier = float(np.mean((validation_y - base_rate) ** 2)) if len(validation_y) else 1.0
+        if brier > 0.25 or brier >= baseline_brier:
             return None
 
         candidate = ModelVersion(
@@ -109,9 +116,14 @@ class ModelService:
                 'means': dict(zip(FEATURE_NAMES, means.tolist())),
                 'scales': dict(zip(FEATURE_NAMES, scales.tolist())),
                 'coefficients': dict(zip(FEATURE_NAMES, weights.tolist())),
-                'intercept': float(intercept), 'cost_pct': 0.002,
+                'intercept': float(intercept),
             }),
-            metrics_json=json.dumps({'samples': len(evaluations), 'validation_samples': len(validation_y), 'brier_score': brier, 'log_loss': log_loss, 'validated_for_execution': False}),
+            metrics_json=json.dumps({
+                'samples': len(evaluations), 'training_samples': len(train_indices),
+                'validation_samples': len(validation_y), 'purged_samples': split - len(train_indices),
+                'brier_score': brier, 'baseline_brier_score': baseline_brier,
+                'log_loss': log_loss, 'validated_for_execution': False,
+            }),
             training_window_start=evaluations[0].decision_at, training_window_end=evaluations[-1].decision_at,
             created_at=utc_now(),
         )

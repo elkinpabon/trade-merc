@@ -11,7 +11,10 @@ from app.utils.helpers import generate_uuid, utc_now
 
 class EvaluationService:
     horizon_candles = 12
-    total_cost_pct = 0.002
+
+    @staticmethod
+    def total_cost(config) -> float:
+        return 2.0 * (float(config.fee_pct or 0.0) + float(config.slippage_pct or 0.0)) / 100.0
 
     @staticmethod
     def build_features(score_data: dict) -> dict:
@@ -45,7 +48,8 @@ class EvaluationService:
         price = float(latest['close'])
         tp_pct = float(config.take_profit_pct) / 100.0
         sl_pct = float(config.stop_loss_pct) / 100.0
-        expected_value = probability * tp_pct - (1.0 - probability) * sl_pct - cls.total_cost_pct
+        total_cost = cls.total_cost(config)
+        expected_value = probability * tp_pct - (1.0 - probability) * sl_pct - total_cost
         entry_eligible = (
             probability >= 0.60 and expected_value >= 0.0015 and
             price > float(latest.get('bb_middle', price)) and float(latest.get('vol_ratio', 1.0)) >= 0.8 and
@@ -57,7 +61,10 @@ class EvaluationService:
             decision_candle_ts=candle_ts, decision_at=latest['datetime'].to_pydatetime(), side='LONG',
             action='ENTER_LONG' if entry_eligible else 'HOLD', entry_price=price, score=score_data['total_score'],
             probability=probability, expected_value_pct=expected_value * 100.0, features_json=json.dumps(features),
-            prediction_json=json.dumps({'model_version': model.version, 'intrabar_policy': 'STOP_FIRST'}),
+            prediction_json=json.dumps({
+                'model_version': model.version, 'intrabar_policy': 'STOP_FIRST',
+                'round_trip_cost_pct': total_cost * 100.0,
+            }),
             tp_price=price * (1.0 + tp_pct), sl_price=price * (1.0 - sl_pct), horizon_candles=cls.horizon_candles,
             created_at=utc_now(), updated_at=utc_now(),
         )
@@ -103,7 +110,9 @@ class EvaluationService:
             evaluation.time_to_label_candles = candles.index(label_candle) + 1
             evaluation.max_favorable_excursion_pct = mfe
             evaluation.max_adverse_excursion_pct = mae
-            evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0
+            prediction = json.loads(evaluation.prediction_json or '{}')
+            cost_pct = float(prediction.get('round_trip_cost_pct', 0.3))
+            evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cost_pct
             resolved += 1
         if resolved:
             db.session.commit()
@@ -147,7 +156,10 @@ class EvaluationService:
                 'label_candle_ts': label_candle.timestamp, 'label_at': label_candle.datetime,
                 'time_to_label_candles': future.index(label_candle) + 1,
                 'max_favorable_excursion_pct': mfe, 'max_adverse_excursion_pct': mae,
-                'realized_return_pct': ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cls.total_cost_pct * 100.0,
+                'realized_return_pct': (
+                    (label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0
+                    - float(json.loads(evaluation.prediction_json or '{}').get('round_trip_cost_pct', 0.3))
+                ),
                 'updated_at': utc_now(),
             })
         if updates:

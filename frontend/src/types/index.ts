@@ -151,3 +151,65 @@ export interface SystemHealthData {
     last_check: string;
   }[];
 }
+
+export interface AnalyticsOverviewData {
+  overview: {
+    total_trades: number;
+    winning_trades: number;
+    losing_trades: number;
+    win_rate: number;
+    profit_factor: number;
+    total_pnl: number;
+    max_drawdown_pct: number;
+    sharpe_ratio: number;
+  };
+  equity_curve: { timestamp: string; equity: number; drawdown: number }[];
+  symbol_breakdown: { symbol: string; trades: number; pnl: number; win_rate: number }[];
+  experiment: { id: string; status: string; started_at: string } | null;
+}
+
+export interface ExperimentReportData {
+  run: {
+    id: string;
+    status: string;
+    model_version_id: string;
+    symbols: string[];
+    timeframe: string;
+    started_at: string;
+    planned_end_at: string;
+    finished_at: string | null;
+  };
+  coverage: {
+    target_days: number;
+    elapsed_days: number;
+    progress_pct: number;
+    days_with_metrics: number;
+    coverage_pct: number;
+    expected_cycles: number;
+    recorded_cycles: number;
+    successful_cycles: number;
+    cycle_coverage_pct: number;
+  };
+  funnel: {
+    evaluations: number;
+    signals: number;
+    orders: number;
+    filled_orders: number;
+    fills: number;
+    closed_trades: number;
+  };
+  performance: {
+    net_pnl: number;
+    gross_pnl_before_fees: number;
+    profit_factor: number | null;
+    expectancy: number;
+    fees: number;
+    wins: number;
+    losses: number;
+    max_drawdown_pct: number;
+  };
+  evaluability: {
+    evaluable: boolean;
+    criteria: Record<string, boolean>;
+  };
+}

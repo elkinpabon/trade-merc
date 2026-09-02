@@ -311,7 +311,7 @@ CREATE TABLE IF NOT EXISTS system_health (
 );
 
 -- 17. Research, learning and reproducible backtesting tables
--- Apply migrations/002_research_learning.sql after this base schema.
+-- Apply migrations/002_research_learning.sql through 004_experiment_traceability.sql after this base schema.
 
 -- ==============================================================================
 -- END OF TIDB CLOUD SCHEMA

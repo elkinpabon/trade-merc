@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from flask import Flask
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, BotRun, PaperPosition, PaperOrder, Signal
+from app.models import BotConfig, BotRun, PaperPosition, PaperOrder, Signal, WorkerCycle
 from app.services import (
     MarketDataService,
     SymbolRulesService,
@@ -22,6 +22,8 @@ from app.services import (
 from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
 from app.utils.helpers import utc_now
+from app.services.experiment_service import ExperimentService
+from app.utils.helpers import generate_uuid
 
 
 def recover_stale_submitted_signals(max_age_minutes: int = 15) -> int:
@@ -30,7 +32,15 @@ def recover_stale_submitted_signals(max_age_minutes: int = 15) -> int:
     stale = Signal.query.filter(Signal.status == 'SUBMITTED', Signal.timestamp < cutoff).all()
     recovered = 0
     for signal in stale:
-        if PaperOrder.query.filter_by(signal_id=signal.id).first():
+        order = PaperOrder.query.filter_by(signal_id=signal.id).first()
+        if order:
+            if order.status == 'FILLED':
+                signal.status = 'EXECUTED'
+                recovered += 1
+            elif order.status in ('REJECTED', 'CANCELLED'):
+                signal.status = 'REJECTED'
+                signal.reason = (signal.reason or '') + f' | Reconciliada con orden {order.status}.'
+                recovered += 1
             continue
         signal.status = 'REJECTED'
         signal.reason = (signal.reason or '') + ' | Recuperada: no existia orden asociada.'
@@ -53,30 +63,61 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
     completed_cycles = 0
     last_cycle_succeeded = False
     while max_cycles is None or completed_cycles < max_cycles:
+        completed_cycles += 1
         cycle_succeeded = False
         polling_interval = 1
+        active_run_id = None
+        worker_cycle_id = None
+        cycle_error = None
+        expected_count = 0
+        received_count = 0
+        processed_count = 0
+        lock_connection = None
+        lock_acquired = False
         with app.app_context():
             try:
-                config = BotConfig.query.first()
-                if not config:
-                    time.sleep(2)
-                    continue
-
-                polling_interval = int(config.polling_interval_seconds) if config.polling_interval_seconds else 1
-
                 active_run = BotRun.query.filter_by(status='running').first()
                 if not active_run:
-                    time.sleep(1)
+                    HealthService.update_component_health("bot_worker", "IDLE", "Bot worker is stopped.")
+                    if max_cycles is None:
+                        time.sleep(1)
                     continue
+                active_run_id = active_run.id
+
+                config = db.session.get(BotConfig, active_run.config_id)
+                if not config:
+                    raise RuntimeError(f'Bot run {active_run.id} has no valid configuration.')
+                polling_interval = int(config.polling_interval_seconds) if config.polling_interval_seconds else 1
+
+                experiment = ExperimentService.active_run(config.id)
+                if experiment and ExperimentService.config_snapshot(config) != experiment.config_snapshot_json:
+                    raise RuntimeError('Experiment configuration changed after the run was frozen.')
+
+                if db.engine.dialect.name.startswith('mysql'):
+                    try:
+                        lock_connection = db.engine.connect()
+                        lock_acquired = lock_connection.execute(
+                            db.text("SELECT GET_LOCK(:name, 0)"),
+                            {"name": "trademerc:bot-worker-cycle"},
+                        ).scalar() == 1
+                    except Exception as lock_error:
+                        if lock_connection:
+                            lock_connection.close()
+                            lock_connection = None
+                        raise RuntimeError(f'MySQL cycle lock unavailable: {lock_error}') from lock_error
+
+                    if lock_connection and not lock_acquired:
+                        cycle_error = "Another bot worker owns the cycle lock."
+                        HealthService.update_component_health("bot_worker", "DEGRADED", cycle_error)
+                        if max_cycles is None:
+                            time.sleep(polling_interval)
+                        continue
 
                 recovered = recover_stale_submitted_signals()
                 if recovered:
                     LogService.log('WARNING', 'ExecutionEngine', f"Señales SUBMITTED recuperadas: {recovered}")
 
-                active_run.last_heartbeat = utc_now()
-                db.session.commit()
-
-                symbols = config.symbols.split(",") if config.symbols else ["BTC/USDT", "ETH/USDT"]
+                symbols = [symbol.strip() for symbol in config.symbols.split(",") if symbol.strip()] if config.symbols else ["BTC/USDT", "ETH/USDT"]
                 timeframe = config.timeframe
 
                 if config.mode == 'live' and app.config.get('LIVE_TRADING_ENABLED'):
@@ -89,8 +130,32 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 risk_svc = RiskService(config)
                 portfolio_svc = PortfolioService(config)
 
+                top_candidates = list(dict.fromkeys(symbols))
+                open_positions = PaperPosition.query.filter_by(is_open=True).all()
+                for position in open_positions:
+                    if position.symbol not in top_candidates:
+                        top_candidates.append(position.symbol)
+
+                expected_count = len(top_candidates)
+                symbol_errors = []
+
+                worker_cycle = WorkerCycle(
+                    id=generate_uuid(), bot_run_id=active_run.id,
+                    strategy_run_id=experiment.id if experiment else None,
+                    status='RUNNING', expected_symbols=expected_count, started_at=utc_now(),
+                )
+                db.session.add(worker_cycle)
+                db.session.commit()
+                worker_cycle_id = worker_cycle.id
+
                 # 1. BATCH FETCH ALL 50+ TICKERS IN A SINGLE ~150ms CALL
-                all_tickers = market_svc.fetch_all_tickers(symbols)
+                all_tickers = market_svc.fetch_all_tickers(top_candidates)
+                all_tickers = all_tickers or {}
+                symbol_prices = {
+                    symbol: ticker['last'] for symbol, ticker in all_tickers.items()
+                    if symbol in top_candidates and ticker.get('last') and ticker['last'] > 0
+                }
+                received_count = len(symbol_prices)
 
                 if all_tickers:
                     # 2. RUN MULTI-MARKET ANOMALY & PATTERN SCANNER
@@ -103,37 +168,32 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                         'markets': scanned_markets[:30]
                     })
 
-                    symbol_prices = {s: t['last'] for s, t in all_tickers.items() if t.get('last')}
-
-                    # Evaluate every configured liquid pair. The scanner only ranks the UI;
-                    # the research dataset needs both entered and rejected decisions.
-                    top_candidates = list(symbols)
-                    
-                    open_positions = PaperPosition.query.filter_by(is_open=True).all()
-                    for p in open_positions:
-                        if p.symbol not in top_candidates:
-                            top_candidates.append(p.symbol)
-
                     for symbol in top_candidates:
-                        current_price = symbol_prices.get(symbol, 0.0)
-                        if current_price <= 0:
-                            continue
+                        try:
+                            current_price = symbol_prices.get(symbol, 0.0)
+                            if current_price <= 0:
+                                continue
 
-                        # Check Stop Loss / Take Profit
-                        sl_tp_check = risk_svc.check_stop_loss_take_profit(symbol, current_price)
-                        if sl_tp_check:
-                            reason = sl_tp_check['reason']
-                            print(f"[RISK EXIT] {reason} for {symbol}")
-                            close_res = executor.close_position(symbol, current_price, reason=reason)
-                            if close_res.get('success'):
-                                LogService.log('WARNING', 'RiskEngine', f"Posición cerrada: {reason} en {symbol}")
-                                broadcast_event('trade_closed', close_res)
-                                broadcast_event('risk_alert', {'type': reason, 'symbol': symbol, 'price': current_price})
-                            continue
+                            # Check Stop Loss / Take Profit
+                            sl_tp_check = risk_svc.check_stop_loss_take_profit(symbol, current_price)
+                            if sl_tp_check:
+                                reason = sl_tp_check['reason']
+                                print(f"[RISK EXIT] {reason} for {symbol}")
+                                close_res = executor.close_position(symbol, current_price, reason=reason)
+                                if close_res.get('success'):
+                                    LogService.log('WARNING', 'RiskEngine', f"Posición cerrada: {reason} en {symbol}")
+                                    broadcast_event('trade_closed', close_res)
+                                    broadcast_event('risk_alert', {'type': reason, 'symbol': symbol, 'price': current_price})
+                                else:
+                                    raise RuntimeError(f"Risk exit failed: {close_res.get('error', 'unknown error')}")
+                                processed_count += 1
+                                continue
 
-                        # Fetch DataFrame for Multi-Factor Analysis
-                        df = market_svc.get_ohlcv_dataframe(symbol, timeframe=timeframe, limit=config.candle_limit)
-                        if not df.empty and len(df) >= 30:
+                            # Fetch DataFrame for Multi-Factor Analysis
+                            df = market_svc.get_ohlcv_dataframe(symbol, timeframe=timeframe, limit=config.candle_limit)
+                            if df.empty or len(df) < 30:
+                                continue
+
                             df = IndicatorService.apply_indicators(
                                 df,
                                 ema_fast=config.ema_fast_period,
@@ -190,10 +250,21 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             evaluation = EvaluationService.record(
                                 config, active_run.id, symbol, timeframe, latest, score_data
                             )
-                            signal = strategy_svc.evaluate_market(
-                                df, symbol, active_run.id, score_data=score_data,
-                                probability=evaluation.probability,
-                            )
+                            signal = None
+                            if not evaluation.signal_id:
+                                signal = strategy_svc.evaluate_market(
+                                    df, symbol, active_run.id, score_data=score_data,
+                                    probability=evaluation.probability,
+                                )
+
+                            if signal:
+                                if (signal.type == 'BUY' and experiment and experiment.planned_end_at
+                                        and utc_now() >= experiment.planned_end_at):
+                                    EvaluationService.link_signal(evaluation, signal.id)
+                                    signal.status = 'REJECTED'
+                                    signal.reason = (signal.reason or '') + ' | Experimento finalizado: nuevas entradas bloqueadas.'
+                                    db.session.commit()
+                                    signal = None
 
                             if signal:
                                 EvaluationService.link_signal(evaluation, signal.id)
@@ -231,30 +302,111 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                                     LogService.log('WARNING', 'RiskEngine', f"Señal RECHAZADA por Motor de Riesgo: {reason}")
                                     broadcast_event('risk_alert', {'type': 'SIGNAL_REJECTED', 'symbol': symbol, 'reason': reason})
 
+                            processed_count += 1
+                        except Exception as symbol_error:
+                            db.session.rollback()
+                            error_text = f"{symbol}: {symbol_error}"
+                            symbol_errors.append(error_text)
+                            print(f"Error processing {error_text}")
+                            traceback.print_exc()
+                            try:
+                                LogService.log('ERROR', 'BotScanner', error_text)
+                            except Exception:
+                                db.session.rollback()
+
                     if symbol_prices:
                         portfolio_svc.update_valuation(symbol_prices)
                         resolved = EvaluationService.resolve_pending()
                         if resolved:
                             LogService.log('INFO', 'LabelService', f"Etiquetas resueltas: {resolved}")
                         ResearchMetricsService.update_paper_daily(config, active_run)
-                        trained = ModelService.train_if_due()
-                        if trained:
-                            LogService.log('INFO', 'ModelService', f"Modelo candidato creado: {trained.version}")
                         broadcast_event('portfolio_updated', portfolio_svc.get_summary())
 
-                if all_tickers:
+                        # Candidate training is best-effort and cannot affect paper execution.
+                        try:
+                            trained = ModelService.train_if_due()
+                            if trained:
+                                LogService.log('INFO', 'ModelService', f"Modelo candidato creado: {trained.version}")
+                        except Exception as training_error:
+                            db.session.rollback()
+                            try:
+                                LogService.log('ERROR', 'ModelService', f"Entrenamiento candidato omitido: {training_error}")
+                            except Exception:
+                                db.session.rollback()
+                                print(f"Unable to log candidate training failure: {training_error}")
+                        try:
+                            LogService.prune(retention_days=90)
+                        except Exception as pruning_error:
+                            db.session.rollback()
+                            print(f"Unable to prune old logs: {pruning_error}")
+
+                        ExperimentService.finish_if_due(experiment)
+
+                coverage = f"expected={expected_count}, received={received_count}, processed={processed_count}"
+                if symbol_errors:
+                    cycle_error = "; ".join(symbol_errors)[:4000]
+                fully_covered = received_count == expected_count and processed_count == expected_count
+                if fully_covered and not symbol_errors:
                     cycle_succeeded = True
-                    HealthService.update_component_health("bot_worker", "HEALTHY", f"Motor Multi-Factor escaneando {len(symbols)} pares con 10 indicadores.")
+                    HealthService.update_component_health("bot_worker", "HEALTHY", f"Cycle coverage: {coverage}.")
                 else:
-                    HealthService.update_component_health("bot_worker", "DEGRADED", "No public market data received during this cycle.")
+                    details = f"Partial cycle coverage: {coverage}."
+                    if symbol_errors:
+                        details += f" Symbol errors: {len(symbol_errors)}."
+                    cycle_error = cycle_error or details
+                    HealthService.update_component_health("bot_worker", "DEGRADED", details)
 
             except Exception as e:
                 db.session.rollback()
+                cycle_error = str(e)
                 print(f"Error in bot loop: {e}")
                 traceback.print_exc()
-                HealthService.update_component_health("bot_worker", "DEGRADED", str(e))
+                try:
+                    HealthService.update_component_health("bot_worker", "DEGRADED", str(e))
+                except Exception:
+                    db.session.rollback()
+            finally:
+                if lock_connection:
+                    try:
+                        if lock_acquired:
+                            lock_connection.execute(
+                                db.text("SELECT RELEASE_LOCK(:name)"),
+                                {"name": "trademerc:bot-worker-cycle"},
+                            )
+                    except Exception as release_error:
+                        print(f"Unable to release MySQL cycle lock: {release_error}")
+                    finally:
+                        lock_connection.close()
 
-        completed_cycles += 1
+                if active_run_id:
+                    try:
+                        run = db.session.get(BotRun, active_run_id)
+                        if run:
+                            run.last_heartbeat = utc_now()
+                            run.error_message = cycle_error
+                            db.session.commit()
+                    except Exception as heartbeat_error:
+                        db.session.rollback()
+                        print(f"Unable to persist final bot heartbeat: {heartbeat_error}")
+
+                if worker_cycle_id:
+                    try:
+                        worker_cycle = db.session.get(WorkerCycle, worker_cycle_id)
+                        if worker_cycle:
+                            worker_cycle.expected_symbols = expected_count
+                            worker_cycle.received_symbols = received_count
+                            worker_cycle.processed_symbols = processed_count
+                            worker_cycle.status = (
+                                'SUCCESS' if cycle_succeeded and not cycle_error
+                                else 'PARTIAL' if cycle_succeeded else 'FAILED'
+                            )
+                            worker_cycle.error_message = cycle_error
+                            worker_cycle.finished_at = utc_now()
+                            db.session.commit()
+                    except Exception as cycle_record_error:
+                        db.session.rollback()
+                        print(f"Unable to persist worker cycle: {cycle_record_error}")
+
         last_cycle_succeeded = cycle_succeeded
         if max_cycles is None:
             time.sleep(polling_interval)

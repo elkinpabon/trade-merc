@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.extensions import db
-from app.models import BotConfig
+from app.models import BotConfig, StrategyRun
 from app.services.log_service import LogService
 
 config_bp = Blueprint('config', __name__)
@@ -16,6 +16,11 @@ def get_config():
 
 @config_bp.route('/config', methods=['PUT'])
 def update_config():
+    if StrategyRun.query.filter_by(run_type='EXPERIMENT', status='RUNNING').first():
+        return jsonify({
+            "success": False,
+            "error": "Configuration is frozen while the 30-day experiment is running.",
+        }), 409
     config = BotConfig.query.first()
     if not config:
         config = BotConfig()

@@ -156,9 +156,9 @@ class StrategyService:
             config = BotConfig.get_active()
         self.config = config
         self.predictor = PricePredictionEngine()
-        self.taker_fee = 0.00075  # 0.075% BNB taker fee
-        self.slippage = 0.0005   # 0.05% slippage
-        self.total_cost = (self.taker_fee * 2) + self.slippage  # ~0.20%
+        self.taker_fee = float(self.config.fee_pct or 0.0) / 100.0
+        self.slippage = float(self.config.slippage_pct or 0.0) / 100.0
+        self.total_cost = 2.0 * (self.taker_fee + self.slippage)
         self.tp_target = (self.config.take_profit_pct or 3.0) / 100.0
         self.sl_target = (self.config.stop_loss_pct or 1.5) / 100.0
 

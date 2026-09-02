@@ -1,45 +1,68 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
+import { serviceUnavailable, toNumber } from '@/lib/server-response';
 
 export const dynamic = 'force-dynamic';
+
+const numericFields = [
+  'virtual_balance', 'rsi_entry_threshold', 'stop_loss_pct', 'take_profit_pct',
+  'risk_per_trade_pct', 'slippage_pct', 'fee_pct',
+] as const;
+
+function serializeConfig(config: any) {
+  return {
+    ...config,
+    symbols: config.symbols ? String(config.symbols).split(',') : [],
+    ...Object.fromEntries(numericFields.map((field) => [field, toNumber(config[field])])),
+    is_active: Boolean(config.is_active),
+  };
+}
 
 export async function GET() {
   try {
     const pool = getDbPool();
-    const [rows]: any = await pool.query('SELECT * FROM bot_configs LIMIT 1');
-    if (rows && rows.length > 0) {
-      return NextResponse.json(rows[0], { status: 200 });
+    const [rows]: any = await pool.query('SELECT * FROM bot_configs ORDER BY id LIMIT 1');
+    if (!rows?.[0]) {
+      return NextResponse.json({ error: 'Bot configuration not found' }, { status: 404 });
     }
-  } catch (err) {
-    console.warn("DB bot_config query fallback:", err);
+    return NextResponse.json(serializeConfig(rows[0]), { status: 200 });
+  } catch (error) {
+    return serviceUnavailable('Bot configuration', error);
   }
-
-  return NextResponse.json({
-    id: 'cfg-1',
-    mode: 'paper',
-    exchange_id: 'binance',
-    symbols: 'BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT',
-    timeframe: '5m',
-    polling_interval_seconds: 1,
-    ema_fast_period: 9,
-    ema_slow_period: 21,
-    rsi_period: 14,
-    rsi_entry_threshold: 50,
-    stop_loss_pct: 2.0,
-    take_profit_pct: 4.0,
-    risk_per_trade_pct: 2.0,
-    max_open_positions: 5,
-    candle_limit: 100,
-    cooldown_seconds: 60,
-    is_active: true
-  }, { status: 200 });
 }
 
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    return NextResponse.json({ success: true, config: body }, { status: 200 });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err?.message }, { status: 500 });
+    const allowedFields = [
+      'name', 'exchange_id', 'mode', 'symbols', 'timeframe', 'virtual_balance',
+      'ema_fast_period', 'ema_slow_period', 'rsi_period', 'rsi_entry_threshold',
+      'stop_loss_pct', 'take_profit_pct', 'risk_per_trade_pct', 'slippage_pct',
+      'fee_pct', 'cooldown_seconds', 'candle_limit', 'polling_interval_seconds', 'is_active',
+    ];
+    const updates = Object.entries(body).filter(([field]) => allowedFields.includes(field));
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No valid configuration fields supplied' }, { status: 400 });
+    }
+    const pool = getDbPool();
+    const [experimentRows]: any = await pool.query(
+      "SELECT id FROM strategy_runs WHERE run_type = 'EXPERIMENT' AND status = 'RUNNING' LIMIT 1"
+    );
+    if (experimentRows?.[0]) {
+      return NextResponse.json({ error: 'La configuración está congelada durante el experimento de 30 días.' }, { status: 409 });
+    }
+    const [configRows]: any = await pool.query('SELECT id FROM bot_configs ORDER BY id LIMIT 1');
+    if (!configRows?.[0]) {
+      return NextResponse.json({ error: 'Bot configuration not found' }, { status: 404 });
+    }
+    const values = updates.map(([field, value]) => field === 'symbols' && Array.isArray(value) ? value.join(',') : value);
+    await pool.query(
+      `UPDATE bot_configs SET ${updates.map(([field]) => `\`${field}\` = ?`).join(', ')} WHERE id = ?`,
+      [...values, configRows[0].id]
+    );
+    const [updatedRows]: any = await pool.query('SELECT * FROM bot_configs WHERE id = ?', [configRows[0].id]);
+    return NextResponse.json({ success: true, config: serializeConfig(updatedRows[0]) }, { status: 200 });
+  } catch (error) {
+    return serviceUnavailable('Bot configuration update', error);
   }
 }

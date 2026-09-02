@@ -59,7 +59,7 @@ export const Navbar: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
             <span className="text-[9px] sm:text-[11px] font-mono text-emerald-300 font-bold truncate max-w-full">
-              Polygon CLOB & Gamma API · online
+              Polymarket · disponibilidad verificada en el módulo
             </span>
             <div className="flex items-center gap-1 shrink-0">
               <button className="win95-button px-1.5 py-0 text-[10px] text-black">_</button>

@@ -30,6 +30,8 @@ class BackfillService:
             if not rows:
                 break
             for row in rows:
+                if int(row[6]) >= end_ms:
+                    continue
                 candles.append({
                     'symbol': symbol, 'timeframe': timeframe, 'timestamp': int(row[0]),
                     'datetime': datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).replace(tzinfo=None),
@@ -70,7 +72,8 @@ class BackfillService:
                 latest = frame.iloc[index]
                 if int(latest['timestamp']) in existing_evaluations:
                     continue
-                score_data = strategy.compute_composite_score(frame.iloc[:index + 1])
+                window_start = max(0, index + 1 - int(config.candle_limit))
+                score_data = strategy.compute_composite_score(frame.iloc[window_start:index + 1])
                 EvaluationService.record(
                     config, None, symbol, config.timeframe, latest, score_data,
                     commit=False, check_existing=False, model=model,
