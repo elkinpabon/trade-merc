@@ -69,7 +69,8 @@ class ModelService:
     @staticmethod
     def train_if_due(minimum_samples: int = 200, minimum_days: int = 7) -> ModelVersion | None:
         active = ModelService.active_model()
-        if active.algorithm == 'logistic_regression' and active.created_at > utc_now() - timedelta(days=minimum_days):
+        latest_candidate = ModelVersion.query.filter_by(model_name='multifactor', algorithm='logistic_regression').order_by(ModelVersion.created_at.desc()).first()
+        if latest_candidate and latest_candidate.created_at > utc_now() - timedelta(days=minimum_days):
             return None
         evaluations = StrategyEvaluation.query.filter_by(label_status='RESOLVED').order_by(StrategyEvaluation.decision_at.asc()).all()
         if len(evaluations) < minimum_samples:

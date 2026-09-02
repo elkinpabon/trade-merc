@@ -2,7 +2,7 @@ name: TRADEMERC ML Trading Bot Worker
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Runs every 5 minutes
+    - cron: '*/15 * * * *'  # Aligned with the 15m strategy timeframe
   workflow_dispatch:        # Manual trigger button
     inputs:
       research_mode:
