@@ -289,7 +289,7 @@ CREATE TABLE IF NOT EXISTS risk_events (
     event_type VARCHAR(50) NOT NULL,
     symbol VARCHAR(32) NULL,
     message TEXT NOT NULL,
-    details JSON NULL,
+    details_json TEXT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -1,4 +1,6 @@
-from flask import Blueprint, jsonify, request
+import hmac
+
+from flask import Blueprint, current_app, jsonify, request
 from app.extensions import db
 from app.models import BotConfig, BotRun, BotLog
 from app.services.log_service import LogService
@@ -6,6 +8,23 @@ from app.sockets import broadcast_event
 from app.utils.helpers import generate_uuid, utc_now
 
 bot_bp = Blueprint('bot', __name__)
+
+
+@bot_bp.route('/worker/cycle', methods=['POST'])
+def run_worker_cycle():
+    """Runs one paper cycle when invoked by a trusted external scheduler."""
+    token = current_app.config.get('WORKER_TRIGGER_TOKEN')
+    authorization = request.headers.get('Authorization', '')
+    provided = authorization.removeprefix('Bearer ').strip()
+    if not token:
+        return jsonify({'success': False, 'error': 'Worker trigger is not configured.'}), 503
+    if not hmac.compare_digest(provided, token):
+        return jsonify({'success': False, 'error': 'Unauthorized worker trigger.'}), 401
+
+    from worker.bot_runner import run_bot_loop
+
+    success = run_bot_loop(current_app._get_current_object(), max_cycles=1)
+    return jsonify({'success': success}), 200 if success else 503
 
 @bot_bp.route('/bot/status', methods=['GET'])
 def get_bot_status():

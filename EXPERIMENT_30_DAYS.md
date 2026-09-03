@@ -31,6 +31,11 @@ El snapshot completo, el modelo y el commit quedan almacenados en `strategy_runs
 - Los logs tienen retencion automatica de 90 dias.
 - Polymarket no forma parte del experimento.
 
+GitHub Actions Scheduled no ofrece puntualidad garantizada. En cuentas Vercel Hobby,
+Vercel Cron solo permite una ejecucion diaria, por lo que no es un reemplazo valido
+para un ciclo de 15 minutos. El endpoint `POST /api/worker/cycle` queda preparado
+para un scheduler externo o Vercel Pro y requiere `Authorization: Bearer <WORKER_TRIGGER_TOKEN>`.
+
 ## Consulta
 
 - Panel: `/analytics`.

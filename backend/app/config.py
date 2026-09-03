@@ -43,6 +43,7 @@ class Config:
     
     PAPER_TRADING_ENABLED = os.environ.get('PAPER_TRADING_ENABLED', 'true').lower() == 'true'
     LIVE_TRADING_ENABLED = os.environ.get('LIVE_TRADING_ENABLED', 'false').lower() == 'true'
+    WORKER_TRIGGER_TOKEN = os.environ.get('WORKER_TRIGGER_TOKEN')
     
     DEFAULT_EXCHANGE = 'binance'
     DEFAULT_SYMBOLS = ",".join(DEFAULT_50_SYMBOLS)

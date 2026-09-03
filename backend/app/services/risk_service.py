@@ -112,4 +112,9 @@ class RiskService:
             timestamp=utc_now()
         )
         db.session.add(event)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as error:
+            # Audit persistence must never prevent risk controls from rejecting a trade.
+            db.session.rollback()
+            print(f"Risk event audit skipped: {error}")
