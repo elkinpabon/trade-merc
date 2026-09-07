@@ -2,7 +2,7 @@ name: TRADEMERC ML Trading Bot Worker
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Aligned with the 15m strategy timeframe
+    - cron: '17 * * * *'  # Repairs the continuous chain if a dispatch is lost
   workflow_dispatch:        # Manual trigger button
     inputs:
       research_mode:
@@ -13,16 +13,23 @@ on:
         description: 'Días para backfill o backtest (máximo 90/365)'
         required: false
         default: '30'
+      block_cycles:
+        description: 'Ciclos de 15 minutos dentro del bloque operativo'
+        required: false
+        default: '8'
 
-concurrency:
-  group: trademerc-paper-research
-  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   run-bot-scan:
     if: github.event_name == 'schedule' || inputs.research_mode == 'cycle' || inputs.research_mode == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 170
+    concurrency:
+      group: trademerc-database-writer
+      cancel-in-progress: false
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -35,8 +42,26 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install --disable-pip-version-check -r backend/requirements.txt
+
+      - name: Apply worker reliability migration
+        env:
+          DB_USER: '3RWNAdLev5dv3er.root'
+          DB_PASSWORD: 'VSGF3kkVfo4CEIu9'
+          DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
+          DB_PORT: '4000'
+          DB_NAME: 'trademerc_db'
+        run: python backend/scripts/apply_migration.py backend/migrations/006_worker_reliability.sql
+
+      - name: Queue successor block
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            gh workflow run bot-worker.yml --repo "$GITHUB_REPOSITORY" --ref main -f research_mode=cycle -f block_cycles=8 && exit 0
+            sleep 10
+          done
+          exit 1
 
       - name: Run one paper-trading cycle
         env:
@@ -45,26 +70,16 @@ jobs:
           DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
           DB_PORT: '4000'
           DB_NAME: 'trademerc_db'
-        run: |
-          python - <<'PY'
-          import os
-          import sys
-
-          sys.path.insert(0, os.path.abspath('backend'))
-
-          from app import create_app
-          from worker.bot_runner import run_bot_loop
-
-          print('Executing one automated paper-trading cycle...')
-          if not run_bot_loop(create_app(), max_cycles=1):
-              raise SystemExit('The paper-trading cycle did not complete with full coverage.')
-          print('Paper-trading cycle finished cleanly.')
-          PY
+          BLOCK_CYCLES: ${{ inputs.block_cycles || '8' }}
+        run: python backend/scripts/run_worker_block.py --cycles "$BLOCK_CYCLES" --timeout-seconds 600
 
   run-research:
     if: github.event_name == 'workflow_dispatch' && inputs.research_mode != 'cycle' && inputs.research_mode != ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    concurrency:
+      group: trademerc-database-writer
+      cancel-in-progress: false
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -77,8 +92,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install --disable-pip-version-check -r backend/requirements.txt
 
       - name: Run manual research task
         env:

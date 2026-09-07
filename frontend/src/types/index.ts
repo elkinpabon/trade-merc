@@ -173,6 +173,7 @@ export interface ExperimentReportData {
     id: string;
     status: string;
     model_version_id: string;
+    git_commit: string | null;
     symbols: string[];
     timeframe: string;
     started_at: string;
@@ -188,8 +189,18 @@ export interface ExperimentReportData {
     expected_cycles: number;
     recorded_cycles: number;
     successful_cycles: number;
+    failed_cycles: number;
     cycle_coverage_pct: number;
   };
+  latest_cycle: {
+    id: string;
+    bot_run_id: string;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    error_message: string | null;
+  } | null;
+  configuration: Record<string, unknown> | null;
   funnel: {
     evaluations: number;
     signals: number;

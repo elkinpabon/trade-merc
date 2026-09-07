@@ -9,9 +9,13 @@ export const BotControlPanel: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [activeExperimentId, setActiveExperimentId] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getBotStatus().then((res) => setIsRunning(res.is_running)).catch(console.error);
+    api.getBotStatus().then((res) => {
+      setIsRunning(res.is_running);
+      setActiveExperimentId(res.active_experiment_id);
+    }).catch(console.error);
   }, []);
 
   const handleToggleBot = async () => {
@@ -20,13 +24,14 @@ export const BotControlPanel: React.FC = () => {
     try {
       if (isRunning) {
         await api.stopBot();
-        setIsRunning(false);
         setStatusMsg('Bot Crypto ML pausado correctamente.');
       } else {
         await api.startBot();
-        setIsRunning(true);
-        setStatusMsg('Bot Crypto ML activado en Piloto Automático.');
+        setStatusMsg('Inicio solicitado. El bot figurará activo tras un ciclo SUCCESS y heartbeat frescos.');
       }
+      const status = await api.getBotStatus();
+      setIsRunning(status.is_running);
+      setActiveExperimentId(status.active_experiment_id);
     } catch (err: any) {
       setStatusMsg(`Error: ${err.message}`);
     } finally {
@@ -62,11 +67,17 @@ export const BotControlPanel: React.FC = () => {
           </div>
         )}
 
+        {activeExperimentId && (
+          <div className="win95-inset bg-white p-2 text-xs font-mono text-[#cc0000] font-bold">
+            Experimento {activeExperimentId} RUNNING: start/stop está bloqueado para no invalidarlo.
+          </div>
+        )}
+
         <div className="win95-inset bg-white p-4 text-center space-y-3">
           <h2 className="text-sm font-bold font-mono uppercase text-[#000080]">Estado del Bot Crypto Spot ML</h2>
           <button
             onClick={handleToggleBot}
-            disabled={loading}
+            disabled={loading || Boolean(activeExperimentId)}
             className={`win95-button w-full py-3 text-sm font-mono font-bold flex items-center justify-center gap-2 ${
               isRunning ? 'bg-[#cc0000] text-white' : 'bg-[#008000] text-white'
             }`}

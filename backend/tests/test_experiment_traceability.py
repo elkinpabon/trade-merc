@@ -29,6 +29,11 @@ class ExperimentTraceabilityTestCase(unittest.TestCase):
         )
         db.session.add(self.config)
         db.session.commit()
+        self.bot_run = BotRun(
+            id=generate_uuid(), config_id=self.config.id, status='running', started_at=utc_now(),
+        )
+        db.session.add(self.bot_run)
+        db.session.commit()
 
     def tearDown(self):
         db.session.remove()
@@ -87,8 +92,6 @@ class ExperimentTraceabilityTestCase(unittest.TestCase):
 
     def test_daily_metric_filters_run_and_uses_intraday_peak_to_trough(self):
         run = ExperimentService.start(self.config, git_commit='a' * 40)
-        bot_run = BotRun(id=generate_uuid(), config_id=self.config.id, status='running', started_at=utc_now())
-        db.session.add(bot_run)
         now = utc_now()
         for equity in (120.0, 90.0):
             db.session.add(PortfolioSnapshot(
@@ -104,7 +107,7 @@ class ExperimentTraceabilityTestCase(unittest.TestCase):
         ))
         db.session.commit()
 
-        metric = ResearchMetricsService.update_paper_daily(self.config, bot_run)
+        metric = ResearchMetricsService.update_paper_daily(self.config, self.bot_run)
 
         self.assertEqual(metric.total_trades, 0)
         self.assertAlmostEqual(metric.max_drawdown_pct, 25.0)

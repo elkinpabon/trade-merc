@@ -72,6 +72,17 @@ class ExperimentService:
     def start(cls, config, git_commit=None):
         if PaperPosition.query.filter_by(is_open=True).count():
             raise ValueError('Cannot start an experiment while a paper position is open.')
+        active_bot_runs = BotRun.query.filter_by(status='running').all()
+        if len(active_bot_runs) != 1 or active_bot_runs[0].config_id != config.id:
+            raise ValueError('Exactly one running bot must use the experiment configuration.')
+        expected = {
+            'mode': 'paper', 'timeframe': '15m', 'virtual_balance': 100.0,
+            'risk_per_trade_pct': 0.25, 'stop_loss_pct': 2.0,
+            'take_profit_pct': 4.0, 'fee_pct': 0.1, 'slippage_pct': 0.05,
+        }
+        invalid = [name for name, value in expected.items() if getattr(config, name) != value]
+        if invalid:
+            raise ValueError(f'Experiment configuration is invalid: {", ".join(invalid)}.')
 
         now = utc_now()
         for previous in StrategyRun.query.filter_by(run_type='EXPERIMENT', status='RUNNING').all():
@@ -82,7 +93,7 @@ class ExperimentService:
         if config.model_version_id != model.id:
             config.model_version_id = model.id
             db.session.flush()
-        bot_run = BotRun.query.filter_by(status='running').order_by(BotRun.started_at.desc()).first()
+        bot_run = active_bot_runs[0]
         snapshot_json = cls.config_snapshot(config)
         run = StrategyRun(
             id=generate_uuid(), run_type='EXPERIMENT', status='RUNNING',

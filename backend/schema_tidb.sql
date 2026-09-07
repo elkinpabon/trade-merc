@@ -75,9 +75,10 @@ CREATE TABLE IF NOT EXISTS bot_configs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL DEFAULT 'TRADEMERC Multi-Market Bot',
     exchange_id VARCHAR(64) DEFAULT 'binance',
+    model_version_id VARCHAR(64) NULL,
     mode VARCHAR(20) DEFAULT 'paper',
     symbols TEXT NULL,
-    timeframe VARCHAR(10) DEFAULT '5m',
+    timeframe VARCHAR(10) DEFAULT '15m',
     virtual_balance DECIMAL(18, 8) DEFAULT 100.00,
     ema_fast_period INT DEFAULT 9,
     ema_slow_period INT DEFAULT 21,
@@ -85,12 +86,12 @@ CREATE TABLE IF NOT EXISTS bot_configs (
     rsi_entry_threshold DECIMAL(10, 4) DEFAULT 50.0,
     stop_loss_pct DECIMAL(10, 4) DEFAULT 2.0,
     take_profit_pct DECIMAL(10, 4) DEFAULT 4.0,
-    risk_per_trade_pct DECIMAL(10, 4) DEFAULT 2.0,
+    risk_per_trade_pct DECIMAL(10, 4) DEFAULT 0.25,
     slippage_pct DECIMAL(10, 4) DEFAULT 0.05,
     fee_pct DECIMAL(10, 4) DEFAULT 0.10,
-    cooldown_seconds INT DEFAULT 60,
+    cooldown_seconds INT DEFAULT 900,
     candle_limit INT DEFAULT 100,
-    polling_interval_seconds INT DEFAULT 1,
+    polling_interval_seconds INT DEFAULT 60,
     is_active BOOLEAN DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -102,9 +103,13 @@ INSERT INTO bot_configs (
     polling_interval_seconds, is_active
 ) VALUES (
     1, 'TRADEMERC Multi-Market Bot', 'binance', 'paper',
-    'BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,AVAX/USDT,LINK/USDT,DOT/USDT,MATIC/USDT,NEAR/USDT,SHIB/USDT,LTC/USDT,UNI/USDT,ATOM/USDT,ETC/USDT,BCH/USDT,APT/USDT,SUI/USDT,FET/USDT,RNDR/USDT,INJ/USDT,TIA/USDT,OP/USDT,ARB/USDT,STX/USDT,FTM/USDT,FIL/USDT,ICP/USDT,PEPE/USDT,WIF/USDT,FLOKI/USDT,BONK/USDT,AAVE/USDT,GRT/USDT,THETA/USDT,RUNE/USDT,LDO/USDT,ALGO/USDT,EGLD/USDT,FLOW/USDT,CHZ/USDT,EOS/USDT,QNT/USDT,GALA/USDT,SAND/USDT,MANA/USDT,AXS/USDT,KSM/USDT',
-    '5m', 100.00, 9, 21, 14, 2.0, 4.0, 1, TRUE
-) ON DUPLICATE KEY UPDATE virtual_balance = 100.00;
+    'BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,LINK/USDT,AVAX/USDT,LTC/USDT',
+    '15m', 100.00, 9, 21, 14, 2.0, 4.0, 60, TRUE
+) ON DUPLICATE KEY UPDATE
+    mode = 'paper', timeframe = '15m', virtual_balance = 100.00,
+    risk_per_trade_pct = 0.25, stop_loss_pct = 2.0,
+    take_profit_pct = 4.0, fee_pct = 0.10, slippage_pct = 0.05,
+    cooldown_seconds = 900, polling_interval_seconds = 60;
 
 -- 6. Bot Runs Table
 CREATE TABLE IF NOT EXISTS bot_runs (

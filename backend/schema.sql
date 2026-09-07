@@ -45,20 +45,20 @@ CREATE TABLE IF NOT EXISTS bot_configs (
     exchange_id VARCHAR(64) DEFAULT 'binance',
     mode VARCHAR(20) DEFAULT 'paper', -- 'paper' or 'live'
     symbols TEXT NULL,
-    timeframe VARCHAR(10) DEFAULT '5m',
-    virtual_balance DECIMAL(18, 8) DEFAULT 1000.00,
+    timeframe VARCHAR(10) DEFAULT '15m',
+    virtual_balance DECIMAL(18, 8) DEFAULT 100.00,
     ema_fast_period INT DEFAULT 9,
     ema_slow_period INT DEFAULT 21,
     rsi_period INT DEFAULT 14,
     rsi_entry_threshold DECIMAL(10, 4) DEFAULT 50.0,
     stop_loss_pct DECIMAL(10, 4) DEFAULT 2.0,
     take_profit_pct DECIMAL(10, 4) DEFAULT 4.0,
-    risk_per_trade_pct DECIMAL(10, 4) DEFAULT 2.0,
+    risk_per_trade_pct DECIMAL(10, 4) DEFAULT 0.25,
     slippage_pct DECIMAL(10, 4) DEFAULT 0.05,
     fee_pct DECIMAL(10, 4) DEFAULT 0.10,
-    cooldown_seconds INT DEFAULT 60,
+    cooldown_seconds INT DEFAULT 900,
     candle_limit INT DEFAULT 100,
-    polling_interval_seconds INT DEFAULT 5,
+    polling_interval_seconds INT DEFAULT 60,
     is_active BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -145,7 +145,6 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     simulated_slippage DECIMAL(18, 8) DEFAULT 0.0,
     rejection_reason TEXT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_order_symbol (symbol)
 );

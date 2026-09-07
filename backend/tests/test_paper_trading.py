@@ -158,6 +158,32 @@ class PaperTradingTestCase(unittest.TestCase):
         self.assertEqual(labeled.label, 'TP_HIT')
         self.assertEqual(labeled.label_status, 'RESOLVED')
 
+    def test_evaluation_uses_next_available_candles_after_a_gap(self):
+        import pandas as pd
+
+        latest = pd.Series({'timestamp': 100, 'datetime': pd.Timestamp('2026-01-01T00:00:00'), 'close': 100.0,
+                            'bb_middle': 99.0, 'vol_ratio': 2.0, 'adx': 25.0})
+        score_data = {
+            'total_score': 80.0, 'trend_score': 20.0, 'momentum_score': 20.0, 'volume_score': 20.0,
+            'volatility_score': 10.0, 'prediction_score': 10.0, 'regime_score': 10.0,
+            'indicators': {'rsi': 55.0, 'adx': 25.0, 'macd_histogram': 1.0, 'vol_ratio': 2.0,
+                           'bullish_cross': False, 'bearish_cross': False},
+            'ml_prediction': {'lr_r_squared': 0.7, 'lr_slope_pct': 1.0, 'lr_direction': 1, 'market_regime': 'TRENDING_UP'},
+        }
+        evaluation = EvaluationService.record(self.config, 'run', 'BTC/USDT', '15m', latest, score_data)
+        timestamps = [100 + index * 900_000 for index in range(1, 14) if index != 6]
+        for timestamp in timestamps:
+            db.session.add(Candle(symbol='BTC/USDT', timeframe='15m', timestamp=timestamp,
+                                  datetime=utc_now(), open=100, high=101, low=99, close=100, volume=1))
+        db.session.commit()
+
+        resolved = EvaluationService._resolve_batch([evaluation])
+        labeled = db.session.get(StrategyEvaluation, evaluation.id)
+
+        self.assertEqual(resolved, 1)
+        self.assertEqual(labeled.label, 'TIMEOUT')
+        self.assertEqual(labeled.label_candle_ts, timestamps[-1])
+
     def test_backtest_replays_resolved_entry(self):
         import pandas as pd
         from datetime import datetime

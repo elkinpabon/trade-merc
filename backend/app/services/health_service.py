@@ -1,11 +1,11 @@
 from datetime import timedelta
 
 from app.extensions import db
-from app.models import SystemHealth, BotRun
+from app.models import SystemHealth, BotRun, WorkerCycle
 from app.utils.helpers import utc_now
 
 
-BOT_HEARTBEAT_STALE_AFTER = timedelta(minutes=15)
+BOT_HEARTBEAT_STALE_AFTER = timedelta(minutes=25)
 
 class HealthService:
     """
@@ -45,17 +45,21 @@ class HealthService:
         if not active_run:
             bot_status = "IDLE"
             bot_details = "Bot worker is stopped."
-        elif not active_run.last_heartbeat:
-            bot_status = "DEGRADED"
-            bot_details = f"Bot Run ID {active_run.id} has no heartbeat."
         else:
-            heartbeat_age = utc_now() - active_run.last_heartbeat
+            latest_success = WorkerCycle.query.filter_by(
+                bot_run_id=active_run.id, status='SUCCESS',
+            ).order_by(WorkerCycle.finished_at.desc()).first()
+        if active_run and not latest_success:
+            bot_status = "DEGRADED"
+            bot_details = f"Bot Run ID {active_run.id} has no successful cycle."
+        elif active_run:
+            heartbeat_age = utc_now() - latest_success.finished_at
             if heartbeat_age > BOT_HEARTBEAT_STALE_AFTER:
                 bot_status = "DEGRADED"
-                bot_details = f"Bot Run ID {active_run.id} heartbeat is stale ({int(heartbeat_age.total_seconds())}s old)."
+                bot_details = f"Bot Run ID {active_run.id} last successful cycle is stale ({int(heartbeat_age.total_seconds())}s old)."
             else:
                 bot_status = "HEALTHY"
-                bot_details = f"Bot Run ID {active_run.id} heartbeat is current ({int(heartbeat_age.total_seconds())}s old)."
+                bot_details = f"Bot Run ID {active_run.id} last successful cycle is current ({int(heartbeat_age.total_seconds())}s old)."
         HealthService.update_component_health("bot_worker", bot_status, bot_details)
 
         records = SystemHealth.query.all()

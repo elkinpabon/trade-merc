@@ -7,7 +7,7 @@ os.environ['DATABASE_URL'] = 'sqlite://'
 
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, BotRun, SystemHealth
+from app.models import BotConfig, BotRun, SystemHealth, WorkerCycle
 from app.services.health_service import BOT_HEARTBEAT_STALE_AFTER, HealthService
 from app.utils.helpers import utc_now
 from worker.bot_runner import run_bot_loop
@@ -58,12 +58,16 @@ class WorkerOperationsTestCase(unittest.TestCase):
         db.session.add(run)
         db.session.commit()
 
-        with patch('worker.bot_runner.MarketDataService.fetch_all_tickers', side_effect=RuntimeError('market failed')):
+        with patch.dict(os.environ, {'WORKER_SLOT_AT': '2026-09-07T02:00:00'}), \
+                patch('worker.bot_runner.MarketDataService.fetch_all_tickers', side_effect=RuntimeError('market failed')):
             result = run_bot_loop(self.app, max_cycles=1)
+            retry_result = run_bot_loop(self.app, max_cycles=1)
 
         db.session.expire_all()
         persisted = db.session.get(BotRun, run.id)
         self.assertFalse(result)
+        self.assertFalse(retry_result)
+        self.assertEqual(WorkerCycle.query.count(), 1)
         self.assertGreater(persisted.last_heartbeat, old_heartbeat)
         self.assertEqual(persisted.error_message, 'market failed')
 

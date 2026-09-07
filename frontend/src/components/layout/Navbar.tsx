@@ -11,6 +11,7 @@ export const Navbar: React.FC = () => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [timeStr, setTimeStr] = useState<string>('12:00');
+  const [activeExperimentId, setActiveExperimentId] = useState<string | null>(null);
   const { isConnected } = useSocket();
 
   const isPolymarketPage = pathname === '/polymarket';
@@ -18,7 +19,10 @@ export const Navbar: React.FC = () => {
   useEffect(() => {
     if (!isPolymarketPage) {
       api.getBotStatus()
-        .then((res) => setIsRunning(res.is_running))
+        .then((res) => {
+          setIsRunning(res.is_running);
+          setActiveExperimentId(res.active_experiment_id);
+        })
         .catch(console.error);
     }
 
@@ -35,11 +39,12 @@ export const Navbar: React.FC = () => {
     try {
       if (isRunning) {
         await api.stopBot();
-        setIsRunning(false);
       } else {
         await api.startBot();
-        setIsRunning(true);
       }
+      const status = await api.getBotStatus();
+      setIsRunning(status.is_running);
+      setActiveExperimentId(status.active_experiment_id);
     } catch (err) {
       console.error('Error al cambiar estado del bot crypto:', err);
     } finally {
@@ -99,7 +104,8 @@ export const Navbar: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={toggleBot}
-            disabled={loading}
+            disabled={loading || Boolean(activeExperimentId)}
+            title={activeExperimentId ? `Experimento ${activeExperimentId} RUNNING: control bloqueado para preservar su validez.` : undefined}
             className={`win95-button px-3 sm:px-4 py-1 text-xs font-bold font-mono flex items-center gap-1.5 ${
               isRunning ? 'bg-[#cc0000] text-white' : 'bg-[#008000] text-white'
             }`}
@@ -109,7 +115,7 @@ export const Navbar: React.FC = () => {
           </button>
 
           <span className="text-[10px] sm:text-xs font-mono text-black font-bold px-2 py-1 win95-inset bg-white truncate max-w-full">
-            MODO: CRYPTO SPOT SIMULACIÓN
+            {activeExperimentId ? `EXPERIMENTO ${activeExperimentId} RUNNING: START/STOP BLOQUEADO` : 'MODO: CRYPTO SPOT SIMULACIÓN'}
           </span>
         </div>
 

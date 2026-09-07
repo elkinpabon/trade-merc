@@ -11,7 +11,7 @@ class BotConfig(db.Model):
     mode = db.Column(db.String(20), default='paper')
     symbols = db.Column(db.Text, default='BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT,ADA/USDT,DOGE/USDT,LINK/USDT,AVAX/USDT,LTC/USDT')
     timeframe = db.Column(db.String(10), default='15m')
-    virtual_balance = db.Column(db.Float, default=1000.0)
+    virtual_balance = db.Column(db.Float, default=100.0)
     ema_fast_period = db.Column(db.Integer, default=9)
     ema_slow_period = db.Column(db.Integer, default=21)
     rsi_period = db.Column(db.Integer, default=14)
@@ -79,6 +79,9 @@ class BotRun(db.Model):
 
 class WorkerCycle(db.Model):
     __tablename__ = 'worker_cycles'
+    __table_args__ = (
+        db.UniqueConstraint('bot_run_id', 'scheduled_at', name='uq_worker_cycle_run_slot'),
+    )
 
     id = db.Column(db.String(64), primary_key=True)
     bot_run_id = db.Column(db.String(64), db.ForeignKey('bot_runs.id'), nullable=False, index=True)
@@ -87,6 +90,7 @@ class WorkerCycle(db.Model):
     expected_symbols = db.Column(db.Integer, nullable=False, default=0)
     received_symbols = db.Column(db.Integer, nullable=False, default=0)
     processed_symbols = db.Column(db.Integer, nullable=False, default=0)
+    scheduled_at = db.Column(db.DateTime, nullable=True, index=True)
     started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     finished_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)

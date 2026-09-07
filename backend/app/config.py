@@ -35,9 +35,12 @@ class Config:
     elif "tidbcloud.com" in db_url:
         ssl_config = {"ssl": {"ssl_mode": "VERIFY_IDENTITY"}}
         
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": ssl_config
-    } if ssl_config else {}
+    SQLALCHEMY_ENGINE_OPTIONS = {} if db_url.startswith('sqlite') else {
+        "pool_pre_ping": True,
+        "pool_recycle": 240,
+        "pool_timeout": 30,
+        **({"connect_args": ssl_config} if ssl_config else {}),
+    }
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     

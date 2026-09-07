@@ -91,8 +91,6 @@ class EvaluationService:
             ).order_by(Candle.timestamp.asc()).limit(evaluation.horizon_candles).all()
             if len(candles) < evaluation.horizon_candles:
                 continue
-            mfe = max((c.high - evaluation.entry_price) / evaluation.entry_price * 100.0 for c in candles)
-            mae = min((c.low - evaluation.entry_price) / evaluation.entry_price * 100.0 for c in candles)
             label = 'TIMEOUT'
             label_candle = candles[-1]
             for candle in candles:
@@ -103,6 +101,9 @@ class EvaluationService:
                 if candle.high >= evaluation.tp_price:
                     label, label_candle = 'TP_HIT', candle
                     break
+            observed = candles[:candles.index(label_candle) + 1]
+            mfe = max((c.high - evaluation.entry_price) / evaluation.entry_price * 100.0 for c in observed)
+            mae = min((c.low - evaluation.entry_price) / evaluation.entry_price * 100.0 for c in observed)
             evaluation.label_status = 'RESOLVED'
             evaluation.label = label
             evaluation.label_candle_ts = label_candle.timestamp
@@ -112,7 +113,9 @@ class EvaluationService:
             evaluation.max_adverse_excursion_pct = mae
             prediction = json.loads(evaluation.prediction_json or '{}')
             cost_pct = float(prediction.get('round_trip_cost_pct', 0.3))
-            evaluation.realized_return_pct = ((label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0) - cost_pct
+            exit_price = (evaluation.tp_price if label == 'TP_HIT' else
+                          evaluation.sl_price if label == 'SL_HIT' else label_candle.close)
+            evaluation.realized_return_pct = ((exit_price - evaluation.entry_price) / evaluation.entry_price * 100.0) - cost_pct
             resolved += 1
         if resolved:
             db.session.commit()
@@ -121,15 +124,28 @@ class EvaluationService:
     @classmethod
     def _resolve_batch(cls, evaluations) -> int:
         """Resolve large historical batches using one candle query instead of one per row."""
-        symbols = {evaluation.symbol for evaluation in evaluations}
-        timeframes = {evaluation.timeframe for evaluation in evaluations}
-        candles = Candle.query.filter(Candle.symbol.in_(symbols), Candle.timeframe.in_(timeframes)).order_by(Candle.symbol, Candle.timeframe, Candle.timestamp).all()
         grouped = {}
         indexes = {}
-        for candle in candles:
-            key = (candle.symbol, candle.timeframe)
-            indexes.setdefault(key, {})[candle.timestamp] = len(grouped.setdefault(key, []))
-            grouped[key].append(candle)
+        evaluation_groups = {}
+        for evaluation in evaluations:
+            evaluation_groups.setdefault((evaluation.symbol, evaluation.timeframe), []).append(evaluation)
+        for key, group in evaluation_groups.items():
+            symbol, timeframe = key
+            minimum_ts = min(evaluation.decision_candle_ts for evaluation in group)
+            maximum_ts = max(evaluation.decision_candle_ts for evaluation in group)
+            horizon = max(evaluation.horizon_candles for evaluation in group)
+            tail = Candle.query.filter(
+                Candle.symbol == symbol, Candle.timeframe == timeframe,
+                Candle.timestamp > maximum_ts,
+            ).order_by(Candle.timestamp.asc()).limit(horizon).all()
+            if not tail:
+                continue
+            candles = Candle.query.filter(
+                Candle.symbol == symbol, Candle.timeframe == timeframe,
+                Candle.timestamp >= minimum_ts, Candle.timestamp <= tail[-1].timestamp,
+            ).order_by(Candle.timestamp.asc()).all()
+            grouped[key] = candles
+            indexes[key] = {candle.timestamp: index for index, candle in enumerate(candles)}
         updates = []
         for evaluation in evaluations:
             candle_list = grouped.get((evaluation.symbol, evaluation.timeframe), [])
@@ -141,8 +157,6 @@ class EvaluationService:
             future = candle_list[index + 1:index + 1 + evaluation.horizon_candles]
             if len(future) < evaluation.horizon_candles:
                 continue
-            mfe = max((candle.high - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in future)
-            mae = min((candle.low - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in future)
             label, label_candle = 'TIMEOUT', future[-1]
             for candle in future:
                 if candle.low <= evaluation.sl_price:
@@ -151,13 +165,18 @@ class EvaluationService:
                 if candle.high >= evaluation.tp_price:
                     label, label_candle = 'TP_HIT', candle
                     break
+            observed = future[:future.index(label_candle) + 1]
+            mfe = max((candle.high - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in observed)
+            mae = min((candle.low - evaluation.entry_price) / evaluation.entry_price * 100.0 for candle in observed)
+            exit_price = (evaluation.tp_price if label == 'TP_HIT' else
+                          evaluation.sl_price if label == 'SL_HIT' else label_candle.close)
             updates.append({
                 'id': evaluation.id, 'label_status': 'RESOLVED', 'label': label,
                 'label_candle_ts': label_candle.timestamp, 'label_at': label_candle.datetime,
                 'time_to_label_candles': future.index(label_candle) + 1,
                 'max_favorable_excursion_pct': mfe, 'max_adverse_excursion_pct': mae,
                 'realized_return_pct': (
-                    (label_candle.close - evaluation.entry_price) / evaluation.entry_price * 100.0
+                    (exit_price - evaluation.entry_price) / evaluation.entry_price * 100.0
                     - float(json.loads(evaluation.prediction_json or '{}').get('round_trip_cost_pct', 0.3))
                 ),
                 'updated_at': utc_now(),
@@ -165,29 +184,31 @@ class EvaluationService:
         if updates:
             if db.engine.dialect.name == 'mysql':
                 connection = db.session.connection()
-                connection.execute(text('''
+                connection.execute(text('DROP TEMPORARY TABLE IF EXISTS evaluation_label_updates'))
+                try:
+                    connection.execute(text('''
                     CREATE TEMPORARY TABLE evaluation_label_updates (
                         id VARCHAR(64) PRIMARY KEY, label_status VARCHAR(20), label VARCHAR(20),
                         label_candle_ts BIGINT, label_at DATETIME, time_to_label_candles INT,
                         max_favorable_excursion_pct DOUBLE, max_adverse_excursion_pct DOUBLE,
                         realized_return_pct DOUBLE, updated_at DATETIME
                     )
-                '''))
-                columns = ('id', 'label_status', 'label', 'label_candle_ts', 'label_at', 'time_to_label_candles',
-                           'max_favorable_excursion_pct', 'max_adverse_excursion_pct', 'realized_return_pct', 'updated_at')
-                for offset in range(0, len(updates), 500):
-                    batch = updates[offset:offset + 500]
-                    params = {}
-                    values = []
-                    for row_index, update in enumerate(batch):
-                        names = []
-                        for column in columns:
-                            parameter = f'{column}_{row_index}'
-                            params[parameter] = update[column]
-                            names.append(f':{parameter}')
-                        values.append(f"({', '.join(names)})")
-                    connection.execute(text(f"INSERT INTO evaluation_label_updates ({', '.join(columns)}) VALUES {', '.join(values)}"), params)
-                connection.execute(text('''
+                    '''))
+                    columns = ('id', 'label_status', 'label', 'label_candle_ts', 'label_at', 'time_to_label_candles',
+                               'max_favorable_excursion_pct', 'max_adverse_excursion_pct', 'realized_return_pct', 'updated_at')
+                    for offset in range(0, len(updates), 500):
+                        batch = updates[offset:offset + 500]
+                        params = {}
+                        values = []
+                        for row_index, update in enumerate(batch):
+                            names = []
+                            for column in columns:
+                                parameter = f'{column}_{row_index}'
+                                params[parameter] = update[column]
+                                names.append(f':{parameter}')
+                            values.append(f"({', '.join(names)})")
+                        connection.execute(text(f"INSERT INTO evaluation_label_updates ({', '.join(columns)}) VALUES {', '.join(values)}"), params)
+                    connection.execute(text('''
                     UPDATE strategy_evaluations evaluation
                     INNER JOIN evaluation_label_updates update_row ON update_row.id = evaluation.id
                     SET evaluation.label_status = update_row.label_status,
@@ -199,7 +220,9 @@ class EvaluationService:
                         evaluation.max_adverse_excursion_pct = update_row.max_adverse_excursion_pct,
                         evaluation.realized_return_pct = update_row.realized_return_pct,
                         evaluation.updated_at = update_row.updated_at
-                '''))
+                    '''))
+                finally:
+                    connection.execute(text('DROP TEMPORARY TABLE IF EXISTS evaluation_label_updates'))
             else:
                 db.session.bulk_update_mappings(StrategyEvaluation, updates)
             db.session.commit()

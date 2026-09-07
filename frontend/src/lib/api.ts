@@ -63,7 +63,13 @@ export const api = {
     }),
   verifyAuth: () => fetcher<{ valid: boolean }>('/auth/verify'),
   getHealth: () => fetcher<SystemHealthData>('/health'),
-  getBotStatus: () => fetcher<{ is_running: boolean; mode: string | null; config: BotConfigData | null }>('/bot/status'),
+  getBotStatus: () => fetcher<{
+    is_running: boolean;
+    worker_status: 'RUNNING' | 'STOPPED' | 'DEGRADED';
+    mode: string | null;
+    config: BotConfigData | null;
+    active_experiment_id: string | null;
+  }>('/bot/status'),
   startBot: () => fetcher<{ success: boolean; message: string }>('/bot/start', { method: 'POST' }),
   stopBot: () => fetcher<{ success: boolean; message: string }>('/bot/stop', { method: 'POST' }),
   getConfig: () => fetcher<BotConfigData>('/config'),

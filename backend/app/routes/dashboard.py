@@ -39,27 +39,4 @@ def get_dashboard_summary():
         }), 200
     except Exception as e:
         print(f"Error in /dashboard/summary: {e}")
-        return jsonify({
-            "bot_status": "STOPPED",
-            "mode": "paper",
-            "exchange": "binance",
-            "active_symbols": ["BTC/USDT", "ETH/USDT"],
-            "portfolio": {
-                "cash_balance": 100.00,
-                "positions_value": 0.0,
-                "total_equity": 100.00,
-                "realized_pnl": 0.0,
-                "unrealized_pnl": 0.0,
-                "peak_equity": 100.00,
-                "drawdown_pct": 0.0,
-                "total_trades": 0,
-                "win_rate": 0.0,
-                "open_positions_count": 0,
-                "positions": [],
-                "recent_trades": []
-            },
-            "last_signal": None,
-            "last_trade": None,
-            "recent_alerts": [],
-            "health": {"status": "ok"}
-        }), 200
+        return jsonify({"error": "Dashboard data is unavailable."}), 503

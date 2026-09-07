@@ -49,16 +49,21 @@ export async function GET() {
     const reportEnd = finishedAt || now;
     const effectiveEnd = new Date(Math.min(reportEnd.getTime(), plannedEndAt.getTime()));
     const attributionEnd = finishedAt || now;
-    const botRunFilter = ` AND bot_run_id IN (
-      SELECT bot_run_id FROM worker_cycles WHERE strategy_run_id = ?
-    )`;
-    const evaluationParams = [run.model_version_id, startedAt, attributionEnd, run.id];
-    const signalParams = [startedAt, attributionEnd, run.id];
+    const [cycleBotRunRows]: any = await pool.query(
+      'SELECT DISTINCT bot_run_id FROM worker_cycles WHERE strategy_run_id = ?', [run.id],
+    );
+    const botRunIds = (cycleBotRunRows || []).map((row: any) => row.bot_run_id);
+    if (!botRunIds.length && run.source_bot_run_id) botRunIds.push(run.source_bot_run_id);
+    const botRunFilter = botRunIds.length
+      ? ` AND bot_run_id IN (${botRunIds.map(() => '?').join(', ')})`
+      : ' AND 1 = 0';
+    const evaluationParams = [run.model_version_id, startedAt, attributionEnd, ...botRunIds];
+    const signalParams = [startedAt, attributionEnd, ...botRunIds];
 
     const [
       [[tradeTotals]], [[orderTotals]], [[fillTotals]], [[positionTotals]],
       [snapshotRows], [[dailyTotals]], [[cycleTotals]], [[evaluationTotals]],
-      [[signalTotals]], [configRows],
+      [[signalTotals]], [configRows], [latestCycleRows],
     ]: any = await Promise.all([
       pool.query(`SELECT COUNT(*) AS closed_trades,
         SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
@@ -79,13 +84,16 @@ export async function GET() {
         WHERE strategy_run_id = ? ORDER BY timestamp ASC`, [run.id]),
       pool.query('SELECT COUNT(*) AS days_with_metrics FROM run_daily_metrics WHERE run_id = ?', [run.id]),
       pool.query(`SELECT COUNT(*) AS recorded_cycles,
-        SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successful_cycles
+        SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successful_cycles,
+        SUM(CASE WHEN status IN ('FAILED', 'PARTIAL') THEN 1 ELSE 0 END) AS failed_cycles
         FROM worker_cycles WHERE strategy_run_id = ?`, [run.id]),
       pool.query(`SELECT COUNT(*) AS evaluations FROM strategy_evaluations
         WHERE model_version_id = ? AND decision_at >= ? AND decision_at <= ?${botRunFilter}`, evaluationParams),
       pool.query(`SELECT COUNT(*) AS signals FROM signals
         WHERE timestamp >= ? AND timestamp <= ?${botRunFilter}`, signalParams),
       run.config_id ? pool.query('SELECT * FROM bot_configs WHERE id = ? LIMIT 1', [run.config_id]) : Promise.resolve([[]]),
+      pool.query(`SELECT id, bot_run_id, status, started_at, finished_at, error_message
+        FROM worker_cycles WHERE strategy_run_id = ? ORDER BY started_at DESC LIMIT 1`, [run.id]),
     ]);
 
     let peak = 0;
@@ -127,6 +135,7 @@ export async function GET() {
         id: run.id,
         status: run.status,
         model_version_id: run.model_version_id,
+        git_commit: run.git_commit && run.git_commit !== 'unknown' ? run.git_commit : null,
         symbols: parseJson<string[]>(run.symbols_json, []),
         timeframe: run.timeframe,
         started_at: startedAt,
@@ -142,8 +151,11 @@ export async function GET() {
         expected_cycles: expectedCycles,
         recorded_cycles: toNumber(cycleTotals.recorded_cycles),
         successful_cycles: successfulCycles,
+        failed_cycles: toNumber(cycleTotals.failed_cycles),
         cycle_coverage_pct: Number(cycleCoveragePct.toFixed(2)),
       },
+      latest_cycle: latestCycleRows?.[0] || null,
+      configuration: Object.keys(capturedConfig).length > 0 ? capturedConfig : null,
       funnel: {
         evaluations: toNumber(evaluationTotals.evaluations),
         signals: toNumber(signalTotals.signals),

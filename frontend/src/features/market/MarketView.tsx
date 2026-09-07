@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { PriceChart } from '@/components/charts/PriceChart';
 import { api } from '@/lib/api';
 import { CandleData, SignalData } from '@/types';
-import { Zap } from 'lucide-react';
 
 export const MarketView: React.FC = () => {
   const [symbol, setSymbol] = useState('BTC/USDT');
@@ -99,15 +98,11 @@ export const MarketView: React.FC = () => {
           ))}
         </div>
 
-        <button disabled={!signal || unavailable} className="win95-button w-full py-2 text-xs font-bold flex items-center justify-center gap-1.5 disabled:text-[#808080]">
-          <Zap className="h-3.5 w-3.5 fill-current" />
-          <span>Copy trade</span>
-        </button>
       </div>
 
       <div className="win95-panel p-3 space-y-2">
         <div className={`win95-inset bg-white p-2 text-center font-bold text-xs font-mono ${signal ? 'text-[#008000]' : 'text-[#808080]'}`}>
-          {signal ? `${signal.action || signal.type} · ${timeframe}` : 'SEÑAL NO DISPONIBLE'}
+          {signal ? `${signal.action || signal.type} · TIMEFRAME NO REGISTRADO` : 'SEÑAL NO DISPONIBLE'}
         </div>
 
         <div className="win95-inset bg-white p-2 text-center font-bold text-xs font-mono">

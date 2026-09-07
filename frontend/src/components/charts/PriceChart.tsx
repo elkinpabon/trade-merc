@@ -94,11 +94,11 @@ export const PriceChart: React.FC<PriceChartProps> = ({
     }
   }, [candles]);
 
-  const isLoading = loading || !candles || candles.length === 0;
+  const isEmpty = !loading && (!candles || candles.length === 0);
 
   return (
     <div className="w-full relative min-h-[350px]">
-      {isLoading && (
+      {loading && (
         <div className="absolute inset-0 z-20 bg-white/90 backdrop-blur-[1px] flex flex-col items-center justify-center space-y-3 p-4 border border-[#808080]">
           <RefreshCw className="h-8 w-8 text-[#000080] animate-spin" />
           <div className="text-xs font-mono font-bold text-[#000080] text-center">
@@ -106,6 +106,13 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           </div>
           <div className="w-48 win95-inset bg-[#e0e0e0] h-3 p-0.5 overflow-hidden">
             <div className="bg-[#000080] h-full w-2/3 animate-pulse" />
+          </div>
+        </div>
+      )}
+      {isEmpty && (
+        <div className="absolute inset-0 z-20 bg-white flex items-center justify-center p-4 border border-[#808080]">
+          <div className="text-xs font-mono font-bold text-[#808080] text-center">
+            No hay velas disponibles para {symbol}.
           </div>
         </div>
       )}

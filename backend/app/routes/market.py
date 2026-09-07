@@ -23,7 +23,9 @@ def get_ticker():
     symbol = request.args.get('symbol', 'BTC/USDT')
     market_svc = MarketDataService()
     try:
-        ticker = market_svc.fetch_public_ticker(symbol)
+        ticker = market_svc.fetch_all_tickers([symbol]).get(symbol)
+        if not ticker:
+            return jsonify({"error": "Market ticker is unavailable."}), 503
         return jsonify(ticker), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -38,17 +40,7 @@ def get_market_scanner():
     try:
         tickers = market_svc.fetch_all_tickers(DEFAULT_50_SYMBOLS[:30])
         if not tickers:
-            # Fallback mock/cache for instant render if network is slow
-            tickers = {
-                sym: {
-                    "symbol": sym,
-                    "last": 92150.0 if "BTC" in sym else 3450.0 if "ETH" in sym else 185.0 if "SOL" in sym else 15.0,
-                    "change_pct": 2.5 if "BTC" in sym else -1.2,
-                    "quote_volume": 50000000.0,
-                    "high": 93000.0,
-                    "low": 91000.0
-                } for sym in DEFAULT_50_SYMBOLS[:20]
-            }
+            return jsonify({"error": "Market scanner data is unavailable."}), 503
 
         scanned = ScannerService.scan_tickers(tickers)
         return jsonify({"total_markets": len(scanned), "markets": scanned}), 200

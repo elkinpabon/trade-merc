@@ -10,6 +10,16 @@ export async function POST() {
   try {
     connection = await pool.getConnection();
     await connection.beginTransaction();
+    const [experimentRows]: any = await connection.query(
+      "SELECT id FROM strategy_runs WHERE run_type = 'EXPERIMENT' AND status = 'RUNNING' LIMIT 1 FOR UPDATE"
+    );
+    if (experimentRows?.[0]) {
+      await connection.rollback();
+      return NextResponse.json({
+        success: false,
+        error: `El experimento ${experimentRows[0].id} está RUNNING; start/stop está bloqueado para preservar su validez.`,
+      }, { status: 409 });
+    }
     const [runRows]: any = await connection.query(
       "SELECT id FROM bot_runs WHERE status = 'running' FOR UPDATE"
     );

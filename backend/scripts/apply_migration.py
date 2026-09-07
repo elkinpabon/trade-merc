@@ -21,9 +21,23 @@ def main():
     with open(migration_path, 'r', encoding='utf-8') as migration_file:
         sql = re.sub(r'^\s*--.*$', '', migration_file.read(), flags=re.MULTILINE)
     statements = [statement.strip() for statement in sql.split(';') if statement.strip()]
+    version = os.path.splitext(os.path.basename(migration_path))[0]
 
     app = create_app()
     with app.app_context(), db.engine.begin() as connection:
+        connection.exec_driver_sql('''
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version VARCHAR(64) PRIMARY KEY,
+                applied_at DATETIME NOT NULL
+            )
+        ''')
+        applied = connection.execute(
+            db.text('SELECT 1 FROM schema_migrations WHERE version = :version'),
+            {'version': version},
+        ).first()
+        if applied:
+            print({'migration': os.path.basename(migration_path), 'status': 'already_applied'})
+            return
         for statement in statements:
             connection.exec_driver_sql(statement)
     print({'migration': os.path.basename(migration_path), 'statements': len(statements), 'status': 'applied'})

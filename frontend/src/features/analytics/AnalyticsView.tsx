@@ -114,6 +114,7 @@ export const AnalyticsView: React.FC = () => {
                 <div className="mt-2">Inicio: {formatDate(report.run.started_at)}</div>
                 <div>Fin previsto: {formatDate(report.run.planned_end_at)}</div>
                 <div>Fin real: {formatDate(report.run.finished_at)}</div>
+                <div>Git commit: {report.run.git_commit || 'No registrado'}</div>
               </div>
               <div className="win95-inset bg-white p-3 text-xs font-mono md:col-span-2">
                 <div className="flex justify-between font-bold">
@@ -146,7 +147,7 @@ export const AnalyticsView: React.FC = () => {
               <StatCard
                 title="Ciclos registrados"
                 value={report.coverage.recorded_cycles}
-                subtitle={`${report.coverage.successful_cycles} exitosos`}
+                subtitle={`${report.coverage.successful_cycles} exitosos / ${report.coverage.failed_cycles} fallidos`}
                 trend="neutral"
               />
               <StatCard
@@ -155,6 +156,26 @@ export const AnalyticsView: React.FC = () => {
                 subtitle={`${Object.values(report.evaluability.criteria).filter(Boolean).length}/${Object.keys(report.evaluability.criteria).length} criterios`}
                 trend={report.evaluability.evaluable ? 'up' : 'neutral'}
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="win95-inset bg-white p-3 text-xs font-mono">
+                <div className="font-bold text-[#000080]">ÚLTIMO CICLO</div>
+                {report.latest_cycle ? (
+                  <div className="mt-2 space-y-1">
+                    <div>Estado: {report.latest_cycle.status}</div>
+                    <div>Inicio: {formatDate(report.latest_cycle.started_at)}</div>
+                    <div>Fin: {formatDate(report.latest_cycle.finished_at)}</div>
+                    {report.latest_cycle.error_message && <div className="text-[#cc0000]">Fallo: {report.latest_cycle.error_message}</div>}
+                  </div>
+                ) : <div className="mt-2 text-[#808080]">No hay ciclos registrados.</div>}
+              </div>
+              <div className="win95-inset bg-white p-3 text-xs font-mono overflow-x-auto">
+                <div className="font-bold text-[#000080]">CONFIGURACIÓN CAPTURADA</div>
+                {report.configuration
+                  ? <pre className="mt-2 text-[10px]">{JSON.stringify(report.configuration, null, 2)}</pre>
+                  : <div className="mt-2 text-[#808080]">No registrada.</div>}
+              </div>
             </div>
 
             <div className="win95-inset bg-white p-3">

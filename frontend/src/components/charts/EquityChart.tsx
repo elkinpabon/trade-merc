@@ -67,12 +67,15 @@ export const EquityChart: React.FC<EquityChartProps> = ({ data, height = 260 }) 
 
   useEffect(() => {
     if (!seriesRef.current || !data) return;
-    const formatted = data.map((d) => ({
-      time: (new Date(d.timestamp).getTime() / 1000) as Time,
-      value: d.equity,
-    }));
+    const byTimestamp = new Map<number, number>();
+    data.forEach((point) => {
+      const timestamp = Math.floor(new Date(point.timestamp).getTime() / 1000);
+      if (Number.isFinite(timestamp)) byTimestamp.set(timestamp, point.equity);
+    });
+    const formatted = Array.from(byTimestamp, ([time, value]) => ({ time: time as Time, value }))
+      .sort((a, b) => Number(a.time) - Number(b.time));
     seriesRef.current.setData(formatted);
-    if (chartRef.current && data.length > 0) {
+    if (chartRef.current && formatted.length > 0) {
       chartRef.current.timeScale().fitContent();
     }
   }, [data]);

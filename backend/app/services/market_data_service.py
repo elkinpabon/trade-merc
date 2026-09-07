@@ -150,16 +150,24 @@ class MarketDataService:
         """Upserts closed candles so research and labels use the same market data."""
         if not candles:
             return
+        timestamps = [candle['timestamp'] for candle in candles]
+        existing = {
+            row[0] for row in db.session.query(Candle.timestamp).filter(
+                Candle.symbol == candles[0]['symbol'],
+                Candle.timeframe == candles[0]['timeframe'],
+                Candle.timestamp.in_(timestamps),
+            ).all()
+        }
+        new_rows = []
         for candle in candles:
-            existing = Candle.query.filter_by(
-                symbol=candle['symbol'], timeframe=candle['timeframe'], timestamp=candle['timestamp']
-            ).first()
-            if existing:
+            if candle['timestamp'] in existing:
                 continue
             candle_datetime = candle.get('datetime') or datetime.fromtimestamp(candle['timestamp'] / 1000.0, tz=timezone.utc).replace(tzinfo=None)
-            db.session.add(Candle(
+            new_rows.append(Candle(
                 symbol=candle['symbol'], timeframe=candle['timeframe'], timestamp=candle['timestamp'],
                 datetime=datetime.fromisoformat(candle_datetime) if isinstance(candle_datetime, str) else candle_datetime, open=candle['open'], high=candle['high'],
                 low=candle['low'], close=candle['close'], volume=candle['volume'],
             ))
+        if new_rows:
+            db.session.add_all(new_rows)
         db.session.commit()

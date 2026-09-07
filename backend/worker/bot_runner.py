@@ -1,10 +1,11 @@
+import os
 import time
 import traceback
 from datetime import datetime, timedelta
 from flask import Flask
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, BotRun, PaperPosition, PaperOrder, Signal, WorkerCycle
+from app.models import BotConfig, BotRun, ModelVersion, PaperPosition, PaperOrder, Signal, WorkerCycle
 from app.services import (
     MarketDataService,
     SymbolRulesService,
@@ -49,6 +50,20 @@ def recover_stale_submitted_signals(max_age_minutes: int = 15) -> int:
         db.session.commit()
     return recovered
 
+
+def recover_stale_worker_cycles(max_age_minutes: int = 15) -> int:
+    cutoff = utc_now() - timedelta(minutes=max_age_minutes)
+    stale = WorkerCycle.query.filter(
+        WorkerCycle.status == 'RUNNING', WorkerCycle.started_at < cutoff,
+    ).all()
+    for cycle in stale:
+        cycle.status = 'FAILED'
+        cycle.finished_at = utc_now()
+        cycle.error_message = cycle.error_message or 'Worker process ended before completing the cycle.'
+    if stale:
+        db.session.commit()
+    return len(stale)
+
 def run_bot_loop(app: Flask, max_cycles: int | None = None):
     """
     Advanced Multi-Factor Multi-Market Execution Loop.
@@ -76,6 +91,24 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
         lock_acquired = False
         with app.app_context():
             try:
+                if db.engine.dialect.name.startswith('mysql'):
+                    try:
+                        lock_connection = db.engine.connect()
+                        lock_acquired = lock_connection.execute(
+                            db.text("SELECT GET_LOCK(:name, 0)"),
+                            {"name": "trademerc:bot-worker-cycle"},
+                        ).scalar() == 1
+                    except Exception as lock_error:
+                        if lock_connection:
+                            lock_connection.close()
+                            lock_connection = None
+                        raise RuntimeError(f'MySQL cycle lock unavailable: {lock_error}') from lock_error
+
+                    if not lock_acquired:
+                        cycle_error = "Another bot worker owns the cycle lock."
+                        HealthService.update_component_health("bot_worker", "DEGRADED", cycle_error)
+                        return False
+
                 active_run = BotRun.query.filter_by(status='running').first()
                 if not active_run:
                     HealthService.update_component_health("bot_worker", "IDLE", "Bot worker is stopped.")
@@ -92,28 +125,13 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 experiment = ExperimentService.active_run(config.id)
                 if experiment and ExperimentService.config_snapshot(config) != experiment.config_snapshot_json:
                     raise RuntimeError('Experiment configuration changed after the run was frozen.')
-
-                if db.engine.dialect.name.startswith('mysql'):
-                    try:
-                        lock_connection = db.engine.connect()
-                        lock_acquired = lock_connection.execute(
-                            db.text("SELECT GET_LOCK(:name, 0)"),
-                            {"name": "trademerc:bot-worker-cycle"},
-                        ).scalar() == 1
-                    except Exception as lock_error:
-                        if lock_connection:
-                            lock_connection.close()
-                            lock_connection = None
-                        raise RuntimeError(f'MySQL cycle lock unavailable: {lock_error}') from lock_error
-
-                    if lock_connection and not lock_acquired:
-                        cycle_error = "Another bot worker owns the cycle lock."
-                        HealthService.update_component_health("bot_worker", "DEGRADED", cycle_error)
-                        if max_cycles is None:
-                            time.sleep(polling_interval)
-                        continue
+                frozen_model = (db.session.get(ModelVersion, experiment.model_version_id)
+                                if experiment else ModelService.active_model())
+                if not frozen_model:
+                    raise RuntimeError('The frozen experiment model does not exist.')
 
                 recovered = recover_stale_submitted_signals()
+                recover_stale_worker_cycles()
                 if recovered:
                     LogService.log('WARNING', 'ExecutionEngine', f"Señales SUBMITTED recuperadas: {recovered}")
 
@@ -139,12 +157,33 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 expected_count = len(top_candidates)
                 symbol_errors = []
 
-                worker_cycle = WorkerCycle(
-                    id=generate_uuid(), bot_run_id=active_run.id,
-                    strategy_run_id=experiment.id if experiment else None,
-                    status='RUNNING', expected_symbols=expected_count, started_at=utc_now(),
-                )
-                db.session.add(worker_cycle)
+                slot_value = os.environ.get('WORKER_SLOT_AT')
+                scheduled_at = (datetime.fromisoformat(slot_value) if slot_value else
+                                utc_now().replace(minute=(utc_now().minute // 15) * 15, second=0, microsecond=0))
+                worker_cycle = WorkerCycle.query.filter_by(
+                    bot_run_id=active_run.id, scheduled_at=scheduled_at,
+                ).first()
+                if worker_cycle and worker_cycle.status == 'SUCCESS':
+                    print(f'Cycle slot {scheduled_at.isoformat()} already completed; skipping duplicate trigger.')
+                    return True
+                if not worker_cycle:
+                    worker_cycle = WorkerCycle(
+                        id=generate_uuid(),
+                        bot_run_id=active_run.id,
+                        strategy_run_id=experiment.id if experiment else None,
+                        scheduled_at=scheduled_at,
+                    )
+                    db.session.add(worker_cycle)
+                worker_cycle.bot_run_id = active_run.id
+                worker_cycle.strategy_run_id = experiment.id if experiment else None
+                worker_cycle.scheduled_at = scheduled_at
+                worker_cycle.status = 'RUNNING'
+                worker_cycle.expected_symbols = expected_count
+                worker_cycle.received_symbols = 0
+                worker_cycle.processed_symbols = 0
+                worker_cycle.started_at = utc_now()
+                worker_cycle.finished_at = None
+                worker_cycle.error_message = None
                 db.session.commit()
                 worker_cycle_id = worker_cycle.id
 
@@ -248,7 +287,8 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             LogService.log('INFO', 'BotScanner', log_msg)
 
                             evaluation = EvaluationService.record(
-                                config, active_run.id, symbol, timeframe, latest, score_data
+                                config, active_run.id, symbol, timeframe, latest, score_data,
+                                model=frozen_model,
                             )
                             signal = None
                             if not evaluation.signal_id:
@@ -366,18 +406,6 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 except Exception:
                     db.session.rollback()
             finally:
-                if lock_connection:
-                    try:
-                        if lock_acquired:
-                            lock_connection.execute(
-                                db.text("SELECT RELEASE_LOCK(:name)"),
-                                {"name": "trademerc:bot-worker-cycle"},
-                            )
-                    except Exception as release_error:
-                        print(f"Unable to release MySQL cycle lock: {release_error}")
-                    finally:
-                        lock_connection.close()
-
                 if active_run_id:
                     try:
                         run = db.session.get(BotRun, active_run_id)
@@ -398,7 +426,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             worker_cycle.processed_symbols = processed_count
                             worker_cycle.status = (
                                 'SUCCESS' if cycle_succeeded and not cycle_error
-                                else 'PARTIAL' if cycle_succeeded else 'FAILED'
+                                else 'PARTIAL' if processed_count > 0 else 'FAILED'
                             )
                             worker_cycle.error_message = cycle_error
                             worker_cycle.finished_at = utc_now()
@@ -406,6 +434,18 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                     except Exception as cycle_record_error:
                         db.session.rollback()
                         print(f"Unable to persist worker cycle: {cycle_record_error}")
+
+                if lock_connection:
+                    try:
+                        if lock_acquired:
+                            lock_connection.execute(
+                                db.text("SELECT RELEASE_LOCK(:name)"),
+                                {"name": "trademerc:bot-worker-cycle"},
+                            )
+                    except Exception as release_error:
+                        print(f"Unable to release MySQL cycle lock: {release_error}")
+                    finally:
+                        lock_connection.close()
 
         last_cycle_succeeded = cycle_succeeded
         if max_cycles is None:
