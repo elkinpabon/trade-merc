@@ -170,7 +170,7 @@ class ExperimentService:
         effective_end = min(run.finished_at or utc_now(), run.planned_end_at)
         elapsed_days = max(1, (effective_end.date() - run.started_at.date()).days + 1)
         coverage_pct = min(100.0, len(daily) / min(cls.DURATION_DAYS, elapsed_days) * 100.0)
-        duration_complete = (run.finished_at or utc_now()) >= run.planned_end_at
+        duration_complete = (run.finished_at or utc_now()) >= run.started_at + timedelta(days=cls.DURATION_DAYS)
         expected_cycles = max(1, int((effective_end - run.started_at).total_seconds() // 900) + 1)
         successful_cycles = sum(cycle.status == 'SUCCESS' for cycle in cycles)
         cycle_coverage_pct = min(100.0, successful_cycles / expected_cycles * 100.0)

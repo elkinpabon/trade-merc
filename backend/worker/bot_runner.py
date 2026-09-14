@@ -150,6 +150,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
 
                 top_candidates = list(dict.fromkeys(symbols))
                 open_positions = PaperPosition.query.filter_by(is_open=True).all()
+                open_position_symbols = {position.symbol for position in open_positions}
                 for position in open_positions:
                     if position.symbol not in top_candidates:
                         top_candidates.append(position.symbol)
@@ -291,11 +292,18 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                                 model=frozen_model,
                             )
                             signal = None
-                            if not evaluation.signal_id:
+                            if (experiment or symbol in open_position_symbols) and not evaluation.signal_id:
                                 signal = strategy_svc.evaluate_market(
                                     df, symbol, active_run.id, score_data=score_data,
                                     probability=evaluation.probability,
                                 )
+
+                            if signal and signal.type == 'BUY' and not experiment:
+                                EvaluationService.link_signal(evaluation, signal.id)
+                                signal.status = 'REJECTED'
+                                signal.reason = (signal.reason or '') + ' | No existe un experimento activo.'
+                                db.session.commit()
+                                signal = None
 
                             if signal:
                                 if (signal.type == 'BUY' and experiment and experiment.planned_end_at

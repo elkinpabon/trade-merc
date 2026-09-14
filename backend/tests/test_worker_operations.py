@@ -1,6 +1,7 @@
 import os
 import unittest
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 os.environ['DATABASE_URL'] = 'sqlite://'
@@ -101,6 +102,48 @@ class WorkerOperationsTestCase(unittest.TestCase):
         self.assertIn('BTC/USDT: BTC failed', persisted.error_message)
         self.assertIn('expected=2, received=2, processed=0', health.details)
         self.assertEqual(health.status, 'DEGRADED')
+
+    def test_cycle_without_experiment_does_not_create_entry_signals(self):
+        import pandas as pd
+
+        config = self.add_config()
+        db.session.add(BotRun(id='run-without-experiment', config_id=config.id, status='running'))
+        db.session.commit()
+        frame = pd.DataFrame([{
+            'timestamp': index, 'datetime': pd.Timestamp('2026-09-14T19:00:00'),
+            'close': 100.0, 'bb_middle': 99.0, 'vol_ratio': 2.0,
+            'rsi': 55.0, 'adx': 25.0, 'macd_histogram': 1.0,
+        } for index in range(30)])
+        score_data = {
+            'total_score': 80.0, 'trend_score': 20.0, 'momentum_score': 20.0,
+            'volume_score': 20.0, 'volatility_score': 10.0,
+            'prediction_score': 10.0, 'regime_score': 10.0,
+            'ml_prediction': {
+                'market_regime': 'TRENDING_UP', 'candle_pattern': 'NONE',
+                'lr_direction': 1, 'lr_r_squared': 0.7,
+            },
+        }
+
+        with patch('worker.bot_runner.LogService.log'), \
+                patch('worker.bot_runner.LogService.prune'), \
+                patch('worker.bot_runner.broadcast_event'), \
+                patch('worker.bot_runner.MarketDataService.fetch_all_tickers', return_value={'BTC/USDT': {'last': 100.0}}), \
+                patch('worker.bot_runner.MarketDataService.get_ohlcv_dataframe', return_value=frame), \
+                patch('worker.bot_runner.ScannerService.scan_tickers', return_value=[]), \
+                patch('worker.bot_runner.RiskService.check_stop_loss_take_profit', return_value=None), \
+                patch('worker.bot_runner.IndicatorService.apply_indicators', return_value=frame), \
+                patch('worker.bot_runner.StrategyService.compute_composite_score', return_value=score_data), \
+                patch('worker.bot_runner.EvaluationService.record', return_value=SimpleNamespace(signal_id=None, probability=0.8)), \
+                patch('worker.bot_runner.StrategyService.evaluate_market') as evaluate_market, \
+                patch('worker.bot_runner.PortfolioService.update_valuation'), \
+                patch('worker.bot_runner.PortfolioService.get_summary', return_value={}), \
+                patch('worker.bot_runner.EvaluationService.resolve_pending', return_value=0), \
+                patch('worker.bot_runner.ResearchMetricsService.update_paper_daily'), \
+                patch('worker.bot_runner.ModelService.train_if_due', return_value=None):
+            result = run_bot_loop(self.app, max_cycles=1)
+
+        self.assertTrue(result)
+        evaluate_market.assert_not_called()
 
     def test_health_degrades_a_stale_running_worker(self):
         config = self.add_config()

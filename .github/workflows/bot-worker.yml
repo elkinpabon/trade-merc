@@ -54,6 +54,8 @@ jobs:
         run: python backend/scripts/apply_migration.py backend/migrations/006_worker_reliability.sql
 
       - name: Queue successor block
+        id: queue-successor
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -72,6 +74,18 @@ jobs:
           DB_NAME: 'trademerc_db'
           BLOCK_CYCLES: ${{ inputs.block_cycles || '8' }}
         run: python backend/scripts/run_worker_block.py --cycles "$BLOCK_CYCLES" --timeout-seconds 600
+
+      - name: Retry successor dispatch after the block
+        if: always() && steps.queue-successor.outcome == 'failure'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            gh workflow run bot-worker.yml --repo "$GITHUB_REPOSITORY" --ref main -f research_mode=cycle -f block_cycles=8 && exit 0
+            sleep 30
+          done
+          exit 1
 
   run-research:
     if: github.event_name == 'workflow_dispatch' && inputs.research_mode != 'cycle' && inputs.research_mode != ''

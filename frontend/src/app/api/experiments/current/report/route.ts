@@ -122,7 +122,7 @@ export async function GET() {
     const configUnchanged = Boolean(currentConfig) && Object.entries(capturedConfig)
       .every(([key, value]) => key in currentConfig && sameConfigValue(currentConfig[key], value));
     const criteria = {
-      duration_30_days: reportEnd.getTime() >= plannedEndAt.getTime(),
+      duration_30_days: reportEnd.getTime() >= startedAt.getTime() + TARGET_DAYS * 86_400_000,
       daily_coverage_at_least_99_pct: coveragePct >= MIN_COVERAGE_PCT,
       cycle_coverage_at_least_99_pct: cycleCoveragePct >= MIN_COVERAGE_PCT,
       at_least_100_closed_trades: closedTrades >= MIN_CLOSED_TRADES,

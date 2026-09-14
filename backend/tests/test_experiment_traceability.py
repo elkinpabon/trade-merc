@@ -121,6 +121,7 @@ class ExperimentTraceabilityTestCase(unittest.TestCase):
         self.assertTrue(ExperimentService.finish_if_due(run))
         self.assertEqual(run.status, 'COMPLETED')
         self.assertIsNotNone(run.finished_at)
+        self.assertFalse(ExperimentService.report(run.id)['evaluability']['criteria']['duration_30_days'])
 
     def test_report_uses_recorded_worker_cycles(self):
         run = ExperimentService.start(self.config, git_commit='a' * 40)
