@@ -22,10 +22,9 @@ class Config:
     ca_cert_path = os.path.join(os.path.dirname(__file__), '..', 'CA_cert', 'isrgrootx1.pem')
     has_ca = os.path.exists(ca_cert_path)
     
-    db_url = os.environ.get(
-        'DATABASE_URL',
-        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    )
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('VPS branch requires an explicit DATABASE_URL; TiDB fallback is disabled.')
     
     SQLALCHEMY_DATABASE_URI = db_url
     

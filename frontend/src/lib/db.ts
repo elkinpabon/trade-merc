@@ -4,6 +4,9 @@ let pool: mysql.Pool | null = null;
 
 export function getDbPool() {
   if (!pool) {
+    if (!process.env.DB_HOST || !process.env.DB_NAME || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+      throw new Error('VPS branch requires explicit MySQL connection settings');
+    }
     pool = mysql.createPool({
       host: process.env.DB_HOST || 'gateway01.us-east-1.prod.aws.tidbcloud.com',
       port: Number(process.env.DB_PORT || 4000),
