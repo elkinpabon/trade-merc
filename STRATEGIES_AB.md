@@ -70,3 +70,22 @@ horizonte 96 velas no equivalen a los cierres reales por señal. El backtest
 legacy se bloquea para estos perfiles: se necesita un replay multi-timeframe
 antes de afirmar rendimiento histórico fuera de muestra. Estas versiones
 se evalúan prospectivamente en paper; no habilitan trading live.
+
+## Experimentos desplegados el 16/10/2026
+
+- A: `1e4622da-67e6-4536-ad31-f3ba2d7296d8`, inicio `2026-10-16T15:43:44Z`,
+  fin previsto `2026-11-15T15:43:44Z`, commit de inicio `652a268`.
+- B: `48453a75-cd97-4022-b20d-2e2e27f1b1f8`, inicio `2026-10-16T15:43:41Z`,
+  fin previsto `2026-11-15T15:43:41Z`, commit de inicio `29ecc5a`.
+- Primer slot oficial de ambos: `15:45 UTC`, SUCCESS, cobertura 20/20/20.
+- Panel A: https://frontend-bay-three-97.vercel.app/analytics
+- API A: https://trade-merc.vercel.app/api/experiments/current/report
+- Panel B: http://212.56.34.67:3100/analytics
+- MySQL B: base `trademerc_vps`, usuario local exclusivo; `elkin_db` queda intacta.
+- Servicios B habilitados al arrancar: `trademerc-worker`, `trademerc-panel`.
+- Monitor externo: `.github/workflows/health-monitor.yml` comprueba A y B;
+  para B exige heartbeat y ciclo SUCCESS frescos usando `/api/bot/status`.
+
+El dominio antiguo `trademerc.elkinext.lat` presentó un fallo DNS/TLS durante
+el despliegue; el alias Vercel de A sí fue verificado. Corregir el dominio
+en su proveedor DNS siguiendo la configuración indicada por Vercel.
