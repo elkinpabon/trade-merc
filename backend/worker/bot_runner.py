@@ -391,7 +391,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
 
                         # Candidate training is best-effort and cannot affect paper execution.
                         try:
-                            trained = ModelService.train_if_due()
+                            trained = ModelService.train_if_due() if config.strategy_key == 'baseline-v1' else None
                             if trained:
                                 LogService.log('INFO', 'ModelService', f"Modelo candidato creado: {trained.version}")
                         except Exception as training_error:
