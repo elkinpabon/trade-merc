@@ -32,3 +32,18 @@ jobs:
               raise SystemExit(f"Worker is not healthy: {worker}")
           print('TRADEMERC production heartbeat is current.')
           PY
+
+      - name: Verify VPS paper worker B
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 30 http://212.56.34.67:3100/api/bot/status)"
+          VPS_STATUS="$response" python - <<'PY'
+          import json
+          import os
+
+          status = json.loads(os.environ['VPS_STATUS'])
+          if status.get('mode') != 'paper' or status.get('worker_status') != 'RUNNING':
+              raise SystemExit(f"VPS paper worker unhealthy: {status}")
+          print('VPS B has a fresh heartbeat and successful cycle.')
+          PY
