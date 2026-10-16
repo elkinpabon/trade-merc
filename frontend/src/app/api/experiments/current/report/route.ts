@@ -22,7 +22,8 @@ function sameConfigValue(current: unknown, captured: unknown) {
     return current == null && captured == null;
   }
   if (current instanceof Date && typeof captured === 'string') {
-    return current.getTime() === new Date(captured).getTime();
+    const capturedUtc = /(?:Z|[+-]\d{2}:\d{2})$/.test(captured) ? captured : `${captured}Z`;
+    return current.getTime() === new Date(capturedUtc).getTime();
   }
   if (typeof captured === 'number') return toNumber(current) === captured;
   if (typeof captured === 'boolean') return Boolean(current) === captured;
