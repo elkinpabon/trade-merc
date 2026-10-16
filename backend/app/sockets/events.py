@@ -17,7 +17,7 @@ def handle_disconnect():
 
 @socketio.on('request_snapshot')
 def handle_snapshot_request():
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
     if config:
         portfolio_svc = PortfolioService(config)
         summary = portfolio_svc.get_summary()

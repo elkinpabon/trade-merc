@@ -1,0 +1,18 @@
+[Unit]
+Description=TRADEMERC VPS strategy B panel
+After=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=elkin
+WorkingDirectory=/home/elkin/trademerc-vps/frontend
+EnvironmentFile=/home/elkin/.config/trademerc-vps/frontend.env
+Environment=NODE_ENV=production
+ExecStart=/opt/trademerc-node/bin/node node_modules/next/dist/bin/next start -p 3100 -H 0.0.0.0
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

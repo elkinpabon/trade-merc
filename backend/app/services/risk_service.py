@@ -62,6 +62,11 @@ class RiskService:
         cash = latest_snapshot.cash_balance if latest_snapshot else self.config.virtual_balance
         total_equity = latest_snapshot.total_equity if latest_snapshot else self.config.virtual_balance
 
+        # Exits must remain possible even when the drawdown breaker is active.
+        if signal.action == 'EXIT_LONG':
+            position = PaperPosition.query.filter_by(symbol=signal.symbol, is_open=True).first()
+            return (True, 'APPROVED', position.quantity) if position and position.quantity > 0 else (False, 'No active position to exit', 0.0)
+
         # 1. Circuit Breaker Check
         if latest_snapshot and latest_snapshot.drawdown_pct >= self.max_allowed_drawdown_pct:
             msg = f"Circuit breaker active: Portfolio Drawdown ({latest_snapshot.drawdown_pct:.2f}%) exceeds max limit ({self.max_allowed_drawdown_pct:.2f}%)"
@@ -79,11 +84,17 @@ class RiskService:
             # 3. Position sizing based on the loss at the configured stop.
             risk_amount = total_equity * (self.config.risk_per_trade_pct / 100.0)
             sl_pct = self.config.stop_loss_pct / 100.0
+            opportunity = json.loads(signal.indicators_json or '{}').get('opportunity')
+            if opportunity:
+                sl_pct = float(opportunity['stop_loss_pct']) / 100.0
 
             if current_price <= 0 or sl_pct <= 0:
                 return False, "Invalid market price", 0.0
 
-            quantity_by_risk = risk_amount / (current_price * sl_pct)
+            # Include estimated round-trip fees and slippage in new-profile risk.
+            costs = (2 * (float(self.config.fee_pct) + float(self.config.slippage_pct)) / 100.0
+                     if opportunity else 0.0)
+            quantity_by_risk = risk_amount / (current_price * (sl_pct + costs))
             max_capital_per_trade = min(cash * 0.95, total_equity * 0.20)
             quantity = min(quantity_by_risk, max_capital_per_trade / current_price)
 

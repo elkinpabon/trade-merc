@@ -7,7 +7,7 @@ config_bp = Blueprint('config', __name__)
 
 @config_bp.route('/config', methods=['GET'])
 def get_config():
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
     if not config:
         config = BotConfig()
         db.session.add(config)
@@ -21,7 +21,7 @@ def update_config():
             "success": False,
             "error": "Configuration is frozen while the 30-day experiment is running.",
         }), 409
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
     if not config:
         config = BotConfig()
         db.session.add(config)

@@ -29,6 +29,12 @@ class ExperimentService:
         }
         return json.dumps(values, sort_keys=True, separators=(',', ':'))
 
+    @classmethod
+    def config_unchanged(cls, config, snapshot):
+        current = json.loads(cls.config_snapshot(config))
+        captured = json.loads(snapshot)
+        return all(current.get(key) == value for key, value in captured.items())
+
     @staticmethod
     def git_commit() -> str:
         try:
@@ -89,7 +95,7 @@ class ExperimentService:
             previous.status = 'SUPERSEDED'
             previous.finished_at = now
 
-        model = ModelService.active_model()
+        model = ModelService.for_config(config)
         if config.model_version_id != model.id:
             config.model_version_id = model.id
             db.session.flush()
@@ -175,7 +181,7 @@ class ExperimentService:
         successful_cycles = sum(cycle.status == 'SUCCESS' for cycle in cycles)
         cycle_coverage_pct = min(100.0, successful_cycles / expected_cycles * 100.0)
         config = db.session.get(BotConfig, run.config_id)
-        config_unchanged = bool(config and cls.config_snapshot(config) == run.config_snapshot_json)
+        config_unchanged = bool(config and cls.config_unchanged(config, run.config_snapshot_json))
         criteria = {
             'duration_30_days': duration_complete,
             'daily_coverage_at_least_99_pct': coverage_pct >= cls.MIN_COVERAGE_PCT,

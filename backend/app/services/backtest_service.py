@@ -15,6 +15,8 @@ class BacktestService:
 
     @staticmethod
     def run(config, start_at: datetime, end_at: datetime) -> BacktestRun:
+        if config.strategy_key != 'baseline-v1':
+            raise ValueError('Multi-timeframe profiles require a candle replay; legacy label backtests are not comparable.')
         model = ModelService.active_model()
         symbols = [symbol.strip() for symbol in config.symbols.split(',') if symbol.strip()]
         run = StrategyRun(

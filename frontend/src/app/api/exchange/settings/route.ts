@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const pool = getDbPool();
     const [[configRows], [settingsRows]]: any = await Promise.all([
-      pool.query('SELECT exchange_id, mode FROM bot_configs ORDER BY id LIMIT 1'),
+      pool.query('SELECT exchange_id, mode FROM bot_configs ORDER BY id DESC LIMIT 1'),
       pool.query('SELECT exchange_id, mode, testnet, rate_limit_ms, updated_at FROM exchange_settings ORDER BY id LIMIT 1'),
     ]);
     const config = configRows?.[0] || null;

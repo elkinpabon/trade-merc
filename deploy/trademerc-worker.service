@@ -1,0 +1,20 @@
+[Unit]
+Description=TRADEMERC VPS paper worker B
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=elkin
+WorkingDirectory=/home/elkin/trademerc-vps
+EnvironmentFile=/home/elkin/.config/trademerc-vps/backend.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/elkin/trademerc-vps/.venv/bin/python backend/scripts/run_persistent_worker.py
+Restart=always
+RestartSec=15
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -28,7 +28,7 @@ def run_worker_cycle():
 
 @bot_bp.route('/bot/status', methods=['GET'])
 def get_bot_status():
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
     active_run = BotRun.query.filter_by(status='running').first()
     
     return jsonify({
@@ -40,7 +40,7 @@ def get_bot_status():
 
 @bot_bp.route('/bot/start', methods=['POST'])
 def start_bot():
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
     if not config:
         return jsonify({"success": False, "error": "Bot configuration not found."}), 404
 
@@ -68,7 +68,7 @@ def start_bot():
 @bot_bp.route('/bot/stop', methods=['POST'])
 def stop_bot():
     active_run = BotRun.query.filter_by(status='running').first()
-    config = BotConfig.query.first()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first()
 
     if active_run:
         active_run.status = 'stopped'

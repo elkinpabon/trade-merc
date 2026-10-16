@@ -33,16 +33,16 @@ export async function GET() {
       [configRows], [runRows], [snapshotRows], [positionRows], [tradeRows],
       [lastSignalRows], [alertRows], [tradeStatsRows], [healthRows],
     ]: any = await Promise.all([
-      pool.query('SELECT * FROM bot_configs ORDER BY id LIMIT 1'),
+      pool.query('SELECT * FROM bot_configs ORDER BY id DESC LIMIT 1'),
       pool.query("SELECT * FROM bot_runs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1"),
-      pool.query('SELECT * FROM portfolio_snapshots ORDER BY timestamp DESC LIMIT 1'),
+      pool.query('SELECT * FROM portfolio_snapshots WHERE config_id = (SELECT MAX(id) FROM bot_configs) ORDER BY timestamp DESC LIMIT 1'),
       pool.query('SELECT * FROM paper_positions WHERE is_open = TRUE ORDER BY opened_at DESC'),
-      pool.query('SELECT * FROM trades ORDER BY closed_at DESC LIMIT 10'),
+      pool.query('SELECT * FROM trades WHERE config_id = (SELECT MAX(id) FROM bot_configs) ORDER BY closed_at DESC LIMIT 10'),
       pool.query('SELECT * FROM signals ORDER BY timestamp DESC LIMIT 1'),
       pool.query('SELECT * FROM risk_events ORDER BY timestamp DESC LIMIT 5'),
       pool.query(`SELECT COUNT(*) AS total_trades,
         SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS winning_trades
-        FROM trades`),
+        FROM trades WHERE config_id = (SELECT MAX(id) FROM bot_configs)`),
       pool.query('SELECT id, component, status, details, last_check FROM system_health ORDER BY component'),
     ]);
 

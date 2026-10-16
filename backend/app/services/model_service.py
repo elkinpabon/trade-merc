@@ -20,6 +20,26 @@ class ModelService:
     """Small, persisted logistic model suitable for scheduled serverless jobs."""
 
     @staticmethod
+    def for_config(config):
+        if config.strategy_key == 'baseline-v1':
+            return ModelService.active_model()
+        from app.services.opportunity_service import PROFILES
+        if config.strategy_key not in PROFILES:
+            raise ValueError('Unknown strategy profile')
+        model = ModelVersion.query.filter_by(model_name='rule_strategy', version=config.strategy_key).first()
+        if not model:
+            model = ModelVersion(
+                id=generate_uuid(), model_name='rule_strategy', version=config.strategy_key,
+                status='candidate', algorithm='deterministic_rules', feature_schema_json='[]',
+                parameters_json=json.dumps({'strategy_key': config.strategy_key}),
+                metrics_json=json.dumps({'validated_for_execution': False, 'source': 'paper rules, no probability estimate'}),
+                created_at=utc_now(),
+            )
+            db.session.add(model)
+            db.session.commit()
+        return model
+
+    @staticmethod
     def ensure_baseline() -> ModelVersion:
         baseline = ModelVersion.query.filter_by(model_name='multifactor', version='baseline-v1').first()
         if baseline:

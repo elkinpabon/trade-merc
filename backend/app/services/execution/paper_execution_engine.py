@@ -1,8 +1,9 @@
+import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from app.services.execution.base_execution_engine import BaseExecutionEngine
 from app.extensions import db
-from app.models import PaperOrder, PaperFill, PaperPosition, Trade, BotConfig, PortfolioSnapshot, SymbolRule
+from app.models import PaperOrder, PaperFill, PaperPosition, Trade, BotConfig, PortfolioSnapshot, SymbolRule, Signal
 from app.utils.helpers import generate_uuid, round_qty, round_price, utc_now
 from app.services.experiment_service import ExperimentService
 
@@ -106,6 +107,13 @@ class PaperExecutionEngine(BaseExecutionEngine):
             quantity = min(quantity, position.quantity)
 
         fill_price = round_price(self.estimate_slippage(price, side, self.slippage_pct), price_prec)
+        stop_loss_pct, take_profit_pct = self.stop_loss_pct, self.take_profit_pct
+        if signal_id:
+            signal = db.session.get(Signal, signal_id)
+            opportunity = json.loads(signal.indicators_json or '{}').get('opportunity') if signal else None
+            if opportunity:
+                stop_loss_pct = float(opportunity['stop_loss_pct'])
+                take_profit_pct = float(opportunity['take_profit_pct'])
         notional = quantity * fill_price
         fee_amount = round_price(self.estimate_fees(notional, self.fee_pct), 4)
 
@@ -169,8 +177,8 @@ class PaperExecutionEngine(BaseExecutionEngine):
                 position.current_price = fill_price
                 position.unrealized_pnl = -fee_amount
                 position.unrealized_pnl_pct = -((fee_amount / notional) * 100.0) if notional else 0.0
-                position.stop_loss_price = round_price(fill_price * (1.0 - self.stop_loss_pct / 100.0), price_prec)
-                position.take_profit_price = round_price(fill_price * (1.0 + self.take_profit_pct / 100.0), price_prec)
+                position.stop_loss_price = round_price(fill_price * (1.0 - stop_loss_pct / 100.0), price_prec)
+                position.take_profit_price = round_price(fill_price * (1.0 + take_profit_pct / 100.0), price_prec)
                 position.entry_order_id = order_id
                 position.entry_fee_amount = fee_amount
                 position.strategy_run_id = attribution['strategy_run_id']

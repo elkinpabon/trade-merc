@@ -8,7 +8,7 @@ dashboard_bp = Blueprint('dashboard', __name__)
 @dashboard_bp.route('/dashboard/summary', methods=['GET'])
 def get_dashboard_summary():
     try:
-        config = BotConfig.query.first()
+        config = BotConfig.query.order_by(BotConfig.id.desc()).first()
         if not config:
             config = BotConfig()
             config.symbols = "BTC/USDT,ETH/USDT,SOL/USDT"

@@ -8,7 +8,7 @@ exchange_bp = Blueprint('exchange', __name__)
 
 @exchange_bp.route('/exchange/settings', methods=['GET'])
 def get_exchange_settings():
-    config = BotConfig.query.first() or BotConfig()
+    config = BotConfig.query.order_by(BotConfig.id.desc()).first() or BotConfig()
     creds = CredentialsService.get_credentials(config.exchange_id)
     
     return jsonify({

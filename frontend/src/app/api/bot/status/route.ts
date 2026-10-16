@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const pool = getDbPool();
     const [[configRows], [runRows], [experimentRows]]: any = await Promise.all([
-      pool.query('SELECT * FROM bot_configs ORDER BY id LIMIT 1'),
+      pool.query('SELECT * FROM bot_configs ORDER BY id DESC LIMIT 1'),
       pool.query("SELECT * FROM bot_runs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1"),
       pool.query("SELECT id FROM strategy_runs WHERE run_type = 'EXPERIMENT' AND status = 'RUNNING' ORDER BY started_at DESC LIMIT 1"),
     ]);

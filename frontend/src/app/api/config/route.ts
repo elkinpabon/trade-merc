@@ -21,7 +21,7 @@ function serializeConfig(config: any) {
 export async function GET() {
   try {
     const pool = getDbPool();
-    const [rows]: any = await pool.query('SELECT * FROM bot_configs ORDER BY id LIMIT 1');
+    const [rows]: any = await pool.query('SELECT * FROM bot_configs ORDER BY id DESC LIMIT 1');
     if (!rows?.[0]) {
       return NextResponse.json({ error: 'Bot configuration not found' }, { status: 404 });
     }
@@ -51,7 +51,7 @@ export async function PUT(request: Request) {
     if (experimentRows?.[0]) {
       return NextResponse.json({ error: 'La configuración está congelada durante el experimento de 30 días.' }, { status: 409 });
     }
-    const [configRows]: any = await pool.query('SELECT id FROM bot_configs ORDER BY id LIMIT 1');
+    const [configRows]: any = await pool.query('SELECT id FROM bot_configs ORDER BY id DESC LIMIT 1');
     if (!configRows?.[0]) {
       return NextResponse.json({ error: 'Bot configuration not found' }, { status: 404 });
     }

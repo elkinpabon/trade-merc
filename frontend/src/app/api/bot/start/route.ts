@@ -21,7 +21,7 @@ export async function POST() {
         error: `El experimento ${experimentRows[0].id} está RUNNING; start/stop está bloqueado para preservar su validez.`,
       }, { status: 409 });
     }
-    const [configRows]: any = await connection.query('SELECT id, mode FROM bot_configs ORDER BY id LIMIT 1 FOR UPDATE');
+    const [configRows]: any = await connection.query('SELECT id, mode FROM bot_configs ORDER BY id DESC LIMIT 1 FOR UPDATE');
     if (!configRows?.[0]) {
       await connection.rollback();
       return NextResponse.json({ success: false, error: 'Bot configuration not found' }, { status: 404 });

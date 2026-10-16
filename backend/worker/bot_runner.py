@@ -24,6 +24,7 @@ from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
 from app.utils.helpers import utc_now
 from app.services.experiment_service import ExperimentService
+from app.services.opportunity_service import OpportunityService, PROFILES
 from app.utils.helpers import generate_uuid
 
 
@@ -120,13 +121,15 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 config = db.session.get(BotConfig, active_run.config_id)
                 if not config:
                     raise RuntimeError(f'Bot run {active_run.id} has no valid configuration.')
+                if config.strategy_key in PROFILES and config.mode != 'paper':
+                    raise RuntimeError('Experimental rule profiles are paper-only.')
                 polling_interval = int(config.polling_interval_seconds) if config.polling_interval_seconds else 1
 
                 experiment = ExperimentService.active_run(config.id)
-                if experiment and ExperimentService.config_snapshot(config) != experiment.config_snapshot_json:
+                if experiment and not ExperimentService.config_unchanged(config, experiment.config_snapshot_json):
                     raise RuntimeError('Experiment configuration changed after the run was frozen.')
                 frozen_model = (db.session.get(ModelVersion, experiment.model_version_id)
-                                if experiment else ModelService.active_model())
+                                if experiment else ModelService.for_config(config))
                 if not frozen_model:
                     raise RuntimeError('The frozen experiment model does not exist.')
 
@@ -196,6 +199,10 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                     if symbol in top_candidates and ticker.get('last') and ticker['last'] > 0
                 }
                 received_count = len(symbol_prices)
+                ranked = OpportunityService.rank(all_tickers)
+                relative_ranks = {symbol: rank + 1 for rank, symbol in enumerate(ranked)}
+                if config.strategy_key in PROFILES:
+                    top_candidates.sort(key=lambda symbol: relative_ranks.get(symbol, 999))
 
                 if all_tickers:
                     # 2. RUN MULTI-MARKET ANOMALY & PATTERN SCANNER
@@ -287,16 +294,28 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             # Log to DB and Broadcast Real-time Log Event
                             LogService.log('INFO', 'BotScanner', log_msg)
 
+                            decision = None
+                            if config.strategy_key in PROFILES:
+                                hourly = market_svc.get_ohlcv_dataframe(symbol, timeframe='1h', limit=200)
+                                four_hourly = market_svc.get_ohlcv_dataframe(symbol, timeframe='4h', limit=200)
+                                decision = OpportunityService.decide(
+                                    config.strategy_key, df, hourly, four_hourly,
+                                    all_tickers[symbol], relative_ranks.get(symbol, 999),
+                                    round_trip_cost_pct=2 * (float(config.fee_pct) + float(config.slippage_pct)),
+                                )
                             evaluation = EvaluationService.record(
                                 config, active_run.id, symbol, timeframe, latest, score_data,
-                                model=frozen_model,
+                                model=frozen_model, **({'decision': decision} if decision else {}),
                             )
                             signal = None
                             if (experiment or symbol in open_position_symbols) and not evaluation.signal_id:
-                                signal = strategy_svc.evaluate_market(
-                                    df, symbol, active_run.id, score_data=score_data,
-                                    probability=evaluation.probability,
-                                )
+                                if decision is not None:
+                                    signal = OpportunityService.signal(config, symbol, active_run.id, df, decision)
+                                else:
+                                    signal = strategy_svc.evaluate_market(
+                                        df, symbol, active_run.id, score_data=score_data,
+                                        probability=evaluation.probability,
+                                    )
 
                             if signal and signal.type == 'BUY' and not experiment:
                                 EvaluationService.link_signal(evaluation, signal.id)

@@ -10,7 +10,7 @@ export function getDbPool() {
       user: process.env.DB_USER || '3RWNAdLev5dv3er.root',
       password: process.env.DB_PASSWORD || 'VSGF3kkVfo4CEIu9',
       database: process.env.DB_NAME || 'trademerc_db',
-      ssl: {
+      ssl: process.env.DB_SSL === 'false' ? undefined : {
         rejectUnauthorized: false
       },
       waitForConnections: true,

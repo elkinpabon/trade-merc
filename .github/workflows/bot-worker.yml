@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   run-bot-scan:
-    if: github.event_name == 'schedule' || inputs.research_mode == 'cycle' || inputs.research_mode == ''
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || inputs.research_mode == 'cycle' || inputs.research_mode == '')
     runs-on: ubuntu-latest
     timeout-minutes: 170
     concurrency:
@@ -51,7 +51,9 @@ jobs:
           DB_HOST: 'gateway01.us-east-1.prod.aws.tidbcloud.com'
           DB_PORT: '4000'
           DB_NAME: 'trademerc_db'
-        run: python backend/scripts/apply_migration.py backend/migrations/006_worker_reliability.sql
+        run: |
+          python backend/scripts/apply_migration.py backend/migrations/006_worker_reliability.sql
+          python backend/scripts/upgrade_strategy_schema.py
 
       - name: Queue successor block
         id: queue-successor
@@ -88,7 +90,7 @@ jobs:
           exit 1
 
   run-research:
-    if: github.event_name == 'workflow_dispatch' && inputs.research_mode != 'cycle' && inputs.research_mode != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.research_mode != 'cycle' && inputs.research_mode != ''
     runs-on: ubuntu-latest
     timeout-minutes: 120
     concurrency:

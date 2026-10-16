@@ -33,7 +33,7 @@ class EvaluationService:
 
     @classmethod
     def record(cls, config, bot_run_id: str, symbol: str, timeframe: str, latest, score_data: dict,
-               commit: bool = True, check_existing: bool = True, model=None) -> StrategyEvaluation:
+               commit: bool = True, check_existing: bool = True, model=None, decision=None) -> StrategyEvaluation:
         model = model or ModelService.active_model()
         if config.model_version_id != model.id:
             config.model_version_id = model.id
@@ -56,16 +56,21 @@ class EvaluationService:
             float(latest.get('adx', 0.0)) >= 18 and score_data['ml_prediction']['lr_direction'] >= 0 and
             score_data['ml_prediction']['market_regime'] != 'TRENDING_DOWN'
         )
+        prediction = {'model_version': model.version, 'intrabar_policy': 'STOP_FIRST',
+                      'round_trip_cost_pct': total_cost * 100.0}
+        if decision is not None:
+            features['opportunity'] = decision
+            probability, expected_value = None, None
+            entry_eligible = decision['eligible']
+            tp_pct, sl_pct = decision['take_profit_pct'] / 100.0, decision['stop_loss_pct'] / 100.0
+            prediction.update({'opportunity': decision, 'probability_source': 'not_estimated'})
         evaluation = StrategyEvaluation(
             id=generate_uuid(), model_version_id=model.id, bot_run_id=bot_run_id, symbol=symbol, timeframe=timeframe,
             decision_candle_ts=candle_ts, decision_at=latest['datetime'].to_pydatetime(), side='LONG',
             action='ENTER_LONG' if entry_eligible else 'HOLD', entry_price=price, score=score_data['total_score'],
-            probability=probability, expected_value_pct=expected_value * 100.0, features_json=json.dumps(features),
-            prediction_json=json.dumps({
-                'model_version': model.version, 'intrabar_policy': 'STOP_FIRST',
-                'round_trip_cost_pct': total_cost * 100.0,
-            }),
-            tp_price=price * (1.0 + tp_pct), sl_price=price * (1.0 - sl_pct), horizon_candles=cls.horizon_candles,
+            probability=probability, expected_value_pct=expected_value * 100.0 if expected_value is not None else None, features_json=json.dumps(features),
+            prediction_json=json.dumps(prediction),
+            tp_price=price * (1.0 + tp_pct), sl_price=price * (1.0 - sl_pct), horizon_candles=96 if decision else cls.horizon_candles,
             created_at=utc_now(), updated_at=utc_now(),
         )
         db.session.add(evaluation)

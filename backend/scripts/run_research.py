@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     app = create_app()
     with app.app_context():
-        config = BotConfig.query.first()
+        config = BotConfig.query.order_by(BotConfig.id.desc()).first()
         if not config:
             raise SystemExit('No bot configuration exists.')
         if args.mode == 'backfill':

@@ -17,7 +17,7 @@ def main():
     app = create_app()
     with app.app_context():
         config = (BotConfig.query.filter_by(id=args.config_id).first() if args.config_id
-                  else BotConfig.query.filter_by(is_active=True).first() or BotConfig.query.first())
+                  else BotConfig.query.order_by(BotConfig.id.desc()).first())
         if not config:
             raise SystemExit('No bot configuration exists.')
         try:
