@@ -163,11 +163,12 @@ class MarketDataService:
             if candle['timestamp'] in existing:
                 continue
             candle_datetime = candle.get('datetime') or datetime.fromtimestamp(candle['timestamp'] / 1000.0, tz=timezone.utc).replace(tzinfo=None)
-            new_rows.append(Candle(
-                symbol=candle['symbol'], timeframe=candle['timeframe'], timestamp=candle['timestamp'],
-                datetime=datetime.fromisoformat(candle_datetime) if isinstance(candle_datetime, str) else candle_datetime, open=candle['open'], high=candle['high'],
-                low=candle['low'], close=candle['close'], volume=candle['volume'],
-            ))
+            new_rows.append({
+                'symbol': candle['symbol'], 'timeframe': candle['timeframe'], 'timestamp': candle['timestamp'],
+                'datetime': datetime.fromisoformat(candle_datetime) if isinstance(candle_datetime, str) else candle_datetime,
+                'open': candle['open'], 'high': candle['high'], 'low': candle['low'],
+                'close': candle['close'], 'volume': candle['volume'],
+            })
         if new_rows:
-            db.session.add_all(new_rows)
+            db.session.execute(db.insert(Candle), new_rows)
         db.session.commit()
