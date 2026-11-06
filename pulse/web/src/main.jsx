@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Activity, Radar, Wallet, ArrowUpRight, ArrowDownRight, ArrowRight, Check,
   CircleHelp, Clock3, Compass, Database, ExternalLink, Layers3, LayoutDashboard,
   ListFilter, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Target,
-  TrendingUp, X, Zap, AlertTriangle, CircleDot, Menu, LockKeyhole, LogOut } from 'lucide-react';
+  TrendingUp, X, Zap, AlertTriangle, CircleDot, Menu, LogOut } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import './style.css';
 import './brand.css';
@@ -33,7 +33,6 @@ function Login({onLogin}) {
     catch(err){setError(err.message);}finally{setBusy(false);}};
   return <main className="login-shell"><section className="login-card">
     <div className="login-brand"><img className="bull-logo login-bull" src="/trademerc.png" alt="Toro TRADEMERC"/><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
-    <div className="login-icon"><LockKeyhole size={22}/></div>
     <h1>Iniciar sesión</h1><p>Accede a tu cuenta paper de Binance Spot.</p>
     <form onSubmit={submit}>
       <label htmlFor="username">Usuario</label><input autoComplete="username" id="username" value={username} onChange={e=>setUsername(e.target.value)} required/>
