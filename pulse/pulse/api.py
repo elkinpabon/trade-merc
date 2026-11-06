@@ -207,6 +207,14 @@ def health(request: Request):
             'monitor': data['monitor'], 'scan': data['scan']}
 
 
+@app.get('/trademerc-bull.svg')
+def bull_logo():
+    logo = DIST / 'trademerc-bull.svg'
+    if not logo.exists():
+        raise HTTPException(404, 'Brand asset not found')
+    return FileResponse(logo, media_type='image/svg+xml', headers={'Cache-Control': 'public, max-age=86400'})
+
+
 DIST = Path(__file__).resolve().parents[1] / 'web' / 'dist'
 if (DIST / 'assets').exists():
     app.mount('/assets', StaticFiles(directory=DIST / 'assets'), name='assets')

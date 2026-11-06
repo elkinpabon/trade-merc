@@ -6,6 +6,7 @@ import { Activity, Radar, Wallet, ArrowUpRight, ArrowDownRight, ArrowRight, Chec
   TrendingUp, X, Zap, AlertTriangle, CircleDot, Menu, LockKeyhole, LogOut } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import './style.css';
+import './brand.css';
 
 const money = (n, digits = 2) => n == null ? '—' : new Intl.NumberFormat('en-US', {style:'currency', currency:'USD', minimumFractionDigits:digits, maximumFractionDigits:digits}).format(n);
 const number = (n, digits = 2) => n == null ? '—' : new Intl.NumberFormat('es-EC', { maximumFractionDigits:digits }).format(n);
@@ -31,7 +32,7 @@ function Login({onLogin}) {
   const submit=async e=>{e.preventDefault();setBusy(true);setError('');try{await onLogin(username,pin);}
     catch(err){setError(err.message);}finally{setBusy(false);}};
   return <main className="login-shell"><section className="login-card">
-    <div className="login-brand"><span className="brand-mark"><Activity size={25}/></span><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
+    <div className="login-brand"><img className="bull-logo login-bull" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
     <div className="login-icon"><LockKeyhole size={22}/></div>
     <h1>Iniciar sesión</h1><p>Accede a tu cuenta paper de Binance Spot.</p>
     <form onSubmit={submit}>
@@ -61,14 +62,14 @@ function Chart({overview}) {
   const values = rows.flatMap(r=>[r.equity,r.benchmark]).filter(v=>Number.isFinite(v));
   const low = Math.min(initial-.1,...values), high = Math.max(initial+.1,...values);
   return <div className="chart-body">{!rows.length ? <Empty title="Preparando curva de capital"/> : <ResponsiveContainer width="100%" height="100%"><AreaChart data={rows} margin={{top:16,right:12,left:-22,bottom:5}}>
-    <defs><linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#007aff" stopOpacity={.15}/><stop offset="100%" stopColor="#007aff" stopOpacity={0}/></linearGradient></defs>
+    <defs><linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4b8f69" stopOpacity={.18}/><stop offset="100%" stopColor="#4b8f69" stopOpacity={0}/></linearGradient></defs>
     <CartesianGrid vertical={false} stroke="#dce3ed" strokeDasharray="3 6"/>
     <XAxis dataKey="at" tickFormatter={v=>new Date(v).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})} tick={{fill:'#758398',fontSize:10}} axisLine={false} tickLine={false} minTickGap={55}/>
     <YAxis domain={[Math.floor(low*100)/100,Math.ceil(high*100)/100]} tickFormatter={v=>`$${v.toFixed(2)}`} tick={{fill:'#758398',fontSize:10}} axisLine={false} tickLine={false} width={68}/>
     <Tooltip contentStyle={{background:'rgba(255,255,255,.96)',border:'1px solid #dce3ed',borderRadius:16,fontSize:12,color:'#182335',boxShadow:'0 8px 30px #26385815'}} labelFormatter={date} formatter={(v,n)=>[money(v,4),n==='equity'?'TRADEMERC':'BTC buy & hold']}/>
     <ReferenceLine y={initial} stroke="#b6c3d4" strokeDasharray="4 5"/>
     <Area type="linear" dataKey="benchmark" stroke="#a99acb" strokeWidth={1.5} strokeDasharray="5 5" fill="none" connectNulls={false} isAnimationActive={false}/>
-    <Area type="linear" dataKey="equity" stroke="#007aff" strokeWidth={2.5} fill="url(#equityFill)" isAnimationActive={false}/>
+    <Area type="linear" dataKey="equity" stroke="#4b8f69" strokeWidth={2.5} fill="url(#equityFill)" isAnimationActive={false}/>
   </AreaChart></ResponsiveContainer>}</div>;
 }
 function App() {
@@ -109,12 +110,12 @@ function App() {
   const signIn=async(username,pin)=>{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,pin})});const body=await res.json();if(!res.ok)throw new Error(body.detail||'No se pudo iniciar sesión');setAuthenticated(true);setRefresh(x=>x+1);};
   const signOut=async()=>{await fetch('/api/auth/logout',{method:'POST'});setAuthenticated(false);setData(null);};
 
-  if(authenticated===null)return <div className="auth-loading"><span className="brand-mark"><Activity size={22}/></span><span>TRADEMERC</span></div>;
+  if(authenticated===null)return <div className="auth-loading"><img className="bull-logo" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><span>TRADEMERC</span></div>;
   if(authenticated===false)return <Login onLogin={signIn}/>;
 
   return <div className="shell">
     <aside className={`sidebar ${mobile?'is-open':''}`}>
-      <a className="brand" href="#" onClick={e=>{e.preventDefault();move('overview');}}><span className="brand-mark"><Activity size={23}/></span><span>TRADEMERC<small>Mercado</small></span></a>
+      <a className="brand" href="#" onClick={e=>{e.preventDefault();move('overview');}}><img className="bull-logo" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><span>TRADEMERC<small>Mercado</small></span></a>
       <div className="workspace"><span className="workspace-icon"><Compass size={18}/></span><div>Cuenta personal<small>Binance Spot</small></div><Tag>Paper</Tag></div>
       <span className="nav-label">Mi espacio</span>
       <nav>{nav.map(([id,Icon,label])=><button key={id} className={`nav-item ${view===id?'active':''}`} onClick={()=>move(id)}><Icon size={18}/><span>{label}</span>{view===id&&<span className="nav-dot"/>}</button>)}</nav>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="horn" x1="8" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69A887"/><stop offset="1" stop-color="#236D4F"/>
+    </linearGradient>
+  </defs>
+  <path d="M13 12c-5 0-8 3-8 8 0 6 5 10 13 11M51 12c5 0 8 3 8 8 0 6-5 10-13 11" stroke="url(#horn)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M18 18c3-5 8-8 14-8s11 3 14 8l5 13-4 16c-1 5-7 10-15 10s-14-5-15-10l-4-16 5-13Z" fill="url(#horn)"/>
+  <path d="m20 23 8 3m16-3-8 3" stroke="#F4FAF6" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M20 37c0-3 3-5 6-5 2 0 4 1 6 3 2-2 4-3 6-3 3 0 6 2 6 5 0 5-5 9-12 9s-12-4-12-9Z" fill="#E6F2EB"/>
+  <path d="M28 39h.1m7.8 0h.1" stroke="#286E52" stroke-width="3" stroke-linecap="round"/>
+  <path d="M29 52c1.8-1.4 4.2-1.4 6 0" stroke="#D8EADF" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

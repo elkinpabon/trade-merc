@@ -15,8 +15,11 @@ an upstream Superpowers plugin. No external scripts or dependencies.
 - Use system typography: -apple-system, BlinkMacSystemFont, 'SF Pro Text',
   'SF Pro Display', 'Segoe UI', sans-serif. San Francisco is used when locally
   available on Apple platforms. Never download or redistribute proprietary fonts.
-- Light cool canvas (#eef2f7), ink (#182335), secondary (#5b697e), blue (#007aff),
-  green (#147d52), translucent white panels. Financial data must remain legible.
+- Light botanical canvas (#f1f5f0), ink (#1b2c22), secondary (#607168), tonal
+  sage/forest greens (#729d80, #397454), translucent white panels. Financial
+  data must remain legible.
+- Use the local `/trademerc-bull.svg` as the TRADEMERC mark in login and shell;
+  preserve its aspect ratio and clear space. Do not substitute a generic activity icon.
 - Floating translucent sidebar, large rounded material surfaces and compact
   pill controls. Use backdrop-filter with a solid fallback.
 - Glass conveys hierarchy. Avoid neon, ornamental radar graphics, uppercase
