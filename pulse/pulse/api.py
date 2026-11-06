@@ -207,12 +207,14 @@ def health(request: Request):
             'monitor': data['monitor'], 'scan': data['scan']}
 
 
-@app.get('/trademerc-bull.svg')
+@app.get('/trademerc.ico')
 def bull_logo():
-    logo = DIST / 'trademerc-bull.svg'
+    logo = DIST / 'trademerc.ico'
     if not logo.exists():
         raise HTTPException(404, 'Brand asset not found')
-    return FileResponse(logo, media_type='image/svg+xml', headers={'Cache-Control': 'public, max-age=86400'})
+    # The supplied .ico asset contains JPEG data (SOI magic FFD8), so serve its
+    # actual media type; browser decoders otherwise render a broken image.
+    return FileResponse(logo, media_type='image/jpeg', headers={'Cache-Control': 'public, max-age=86400'})
 
 
 DIST = Path(__file__).resolve().parents[1] / 'web' / 'dist'

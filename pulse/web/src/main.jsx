@@ -32,7 +32,7 @@ function Login({onLogin}) {
   const submit=async e=>{e.preventDefault();setBusy(true);setError('');try{await onLogin(username,pin);}
     catch(err){setError(err.message);}finally{setBusy(false);}};
   return <main className="login-shell"><section className="login-card">
-    <div className="login-brand"><img className="bull-logo login-bull" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
+    <div className="login-brand"><img className="bull-logo login-bull" src="/trademerc.ico" alt="Toro TRADEMERC"/><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
     <div className="login-icon"><LockKeyhole size={22}/></div>
     <h1>Iniciar sesión</h1><p>Accede a tu cuenta paper de Binance Spot.</p>
     <form onSubmit={submit}>
@@ -110,12 +110,12 @@ function App() {
   const signIn=async(username,pin)=>{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,pin})});const body=await res.json();if(!res.ok)throw new Error(body.detail||'No se pudo iniciar sesión');setAuthenticated(true);setRefresh(x=>x+1);};
   const signOut=async()=>{await fetch('/api/auth/logout',{method:'POST'});setAuthenticated(false);setData(null);};
 
-  if(authenticated===null)return <div className="auth-loading"><img className="bull-logo" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><span>TRADEMERC</span></div>;
+  if(authenticated===null)return <div className="auth-loading"><img className="bull-logo" src="/trademerc.ico" alt="Toro TRADEMERC"/><span>TRADEMERC</span></div>;
   if(authenticated===false)return <Login onLogin={signIn}/>;
 
   return <div className="shell">
     <aside className={`sidebar ${mobile?'is-open':''}`}>
-      <a className="brand" href="#" onClick={e=>{e.preventDefault();move('overview');}}><img className="bull-logo" src="/trademerc-bull.svg" alt="Toro TRADEMERC"/><span>TRADEMERC<small>Mercado</small></span></a>
+      <a className="brand" href="#" onClick={e=>{e.preventDefault();move('overview');}}><img className="bull-logo" src="/trademerc.ico" alt="Toro TRADEMERC"/><span>TRADEMERC<small>Mercado</small></span></a>
       <div className="workspace"><span className="workspace-icon"><Compass size={18}/></span><div>Cuenta personal<small>Binance Spot</small></div><Tag>Paper</Tag></div>
       <span className="nav-label">Mi espacio</span>
       <nav>{nav.map(([id,Icon,label])=><button key={id} className={`nav-item ${view===id?'active':''}`} onClick={()=>move(id)}><Icon size={18}/><span>{label}</span>{view===id&&<span className="nav-dot"/>}</button>)}</nav>

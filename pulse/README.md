@@ -6,7 +6,7 @@ preservar el despliegue y su historial. La marca visible es TRADEMERC.
 
 Interfaz: material translúcido claro, controles de vidrio y tipografía del
 sistema. Safari/macOS/iOS usan San Francisco si está disponible; Windows usa
-Segoe UI. El toro de TRADEMERC se usa en el login, panel y favicon. No se redistribuyen fuentes propietarias de Apple ni se descargan
+Segoe UI. El `.ico` oficial de TRADEMERC se usa en login, panel y favicon. No se redistribuyen fuentes propietarias de Apple ni se descargan
 fuentes desde Google. Guía UI: `.opencode/skills/trademerc-liquid-ui/SKILL.md`.
 
 Aplicación autónoma de investigación **paper-only**. Ninguna ruta permite órdenes

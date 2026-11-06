@@ -18,7 +18,8 @@ an upstream Superpowers plugin. No external scripts or dependencies.
 - Light botanical canvas (#f1f5f0), ink (#1b2c22), secondary (#607168), tonal
   sage/forest greens (#729d80, #397454), translucent white panels. Financial
   data must remain legible.
-- Use the local `/trademerc-bull.svg` as the TRADEMERC mark in login and shell;
+- Use the original `frontend/public/favicon.ico`, copied to
+  `pulse/web/public/trademerc.ico`, as the TRADEMERC mark in login and shell;
   preserve its aspect ratio and clear space. Do not substitute a generic activity icon.
 - Floating translucent sidebar, large rounded material surfaces and compact
   pill controls. Use backdrop-filter with a solid fallback.

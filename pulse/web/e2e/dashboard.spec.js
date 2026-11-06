@@ -23,8 +23,9 @@ test('unauthenticated requests blocked and invalid PIN rejected',async({page})=>
   expect((await page.request.get('/api/overview')).status()).toBe(401);
   await page.goto('/');
   await expect(page.getByRole('heading',{name:'Iniciar sesión'})).toBeVisible();
-  await expect(page.getByRole('img',{name:'Toro TRADEMERC'})).toHaveAttribute('src','/trademerc-bull.svg');
+  await expect(page.getByRole('img',{name:'Toro TRADEMERC'})).toHaveAttribute('src','/trademerc.ico');
   await expect.poll(()=>page.getByRole('img',{name:'Toro TRADEMERC'}).evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
+  await page.screenshot({path:'test-results/trademerc-login.png',fullPage:true});
   await page.getByLabel('PIN').fill('wrong-pin');
   await page.getByRole('button',{name:'Continuar'}).click();
   await expect(page.getByRole('alert')).toContainText('incorrectos');
@@ -36,7 +37,7 @@ test('real market dashboard, navigation, search and decision drawer', async ({pa
   page.on('pageerror',e=>errors.push(e.message));
   await login(page);
   await expect(page.getByRole('link', {name:'TRADEMERC Mercado'})).toBeVisible();
-  await expect(page.getByRole('img',{name:'Toro TRADEMERC'}).first()).toHaveAttribute('src','/trademerc-bull.svg');
+  await expect(page.getByRole('img',{name:'Toro TRADEMERC'}).first()).toHaveAttribute('src','/trademerc.ico');
   await expect.poll(()=>page.getByRole('img',{name:'Toro TRADEMERC'}).first().evaluate(img=>img.naturalWidth)).toBeGreaterThan(0);
   await expect(page).toHaveTitle('TRADEMERC — Mercado');
   await page.screenshot({path:'test-results/pulse-desktop.png',fullPage:true});
