@@ -19,14 +19,18 @@ class ApiTests(unittest.TestCase):
             url = 'sqlite:///' + str(Path(directory) / 'api.db')
             with patch.dict(os.environ, {'PULSE_DATABASE_URL': url, 'PULSE_LOGIN_PIN_HASH':pin_hash,
                                          'PULSE_SESSION_SECRET':'x'*64,'PULSE_COOKIE_SECURE':'true'}), \
-                    patch('pulse.api.Runtime.start'), patch('pulse.api.Runtime.shutdown'):
+                    patch('pulse.api.Runtime.start'), patch('pulse.api.Runtime.shutdown'), \
+                    patch('pulse.api.DIST', Path(__file__).resolve().parents[1] / 'web' / 'public'):
                 with TestClient(app, base_url='https://testserver') as client:
                     self.assertEqual(client.get('/api/overview').status_code, 401)
                     self.assertEqual(client.get('/api/health').status_code, 401)
-                    logo = client.get('/trademerc.ico')
+                    logo = client.get('/trademerc.png')
                     self.assertEqual(logo.status_code, 200)
-                    self.assertEqual(logo.headers['content-type'], 'image/jpeg')
-                    self.assertTrue(logo.content.startswith(b'\xff\xd8'))
+                    self.assertEqual(logo.headers['content-type'], 'image/png')
+                    self.assertTrue(logo.content.startswith(b'\x89PNG\r\n\x1a\n'))
+                    legacy_logo = client.get('/trademerc.ico')
+                    self.assertEqual(legacy_logo.status_code, 200)
+                    self.assertEqual(legacy_logo.content, logo.content)
                     self.assertEqual(client.post('/api/auth/login', json={'username':'elkinpabon','pin':'wrong'}).status_code, 401)
                     self.assertEqual(client.post('/api/auth/login', headers={'origin':'https://evil.invalid'},
                                                   json={'username':'elkinpabon','pin':'test-pin'}).status_code, 403)
