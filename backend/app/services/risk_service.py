@@ -1,7 +1,7 @@
 import json
 from typing import Tuple, Dict, Any, List, Optional
 from app.extensions import db
-from app.models import BotConfig, PaperPosition, PortfolioSnapshot, RiskEvent, Signal
+from app.models import BotConfig, PaperPosition, PortfolioSnapshot, RiskEvent, Signal, SymbolRule
 from app.utils.helpers import utc_now, round_price, round_qty
 
 class RiskService:
@@ -29,6 +29,25 @@ class RiskService:
         position.unrealized_pnl = curr_val - entry_val
         position.unrealized_pnl_pct = ((current_price - position.entry_price) / position.entry_price * 100.0) if position.entry_price > 0 else 0.0
         db.session.commit()
+
+        rule = SymbolRule.query.filter_by(symbol=symbol).first()
+        precision = rule.qty_precision if rule else 6
+        sellable = round_qty(position.quantity, precision)
+        minimum_qty = rule.min_qty if rule else 0.0001
+        minimum_notional = rule.min_notional if rule else 10.0
+        if sellable < minimum_qty or sellable * current_price < minimum_notional:
+            message = f'Paper residual below exchange minimum: position={position.id}'
+            if not RiskEvent.query.filter_by(event_type='PAPER_DUST', symbol=symbol, message=message).first():
+                self.log_risk_event('PAPER_DUST', symbol, message, {
+                    'position_id': position.id, 'strategy_run_id': position.strategy_run_id,
+                    'quantity': float(position.quantity), 'sellable_quantity': sellable,
+                    'price': current_price, 'minimum_qty': float(minimum_qty),
+                    'minimum_notional': float(minimum_notional),
+                    'treatment': 'retained_open_and_valued_no_sale',
+                })
+            return {'trigger': 'DUST', 'reason': 'POSITION_BELOW_EXCHANGE_MINIMUM',
+                    'position': position, 'sellable_quantity': sellable,
+                    'minimum_qty': minimum_qty, 'minimum_notional': minimum_notional}
 
         # Stop Loss Trigger
         if position.stop_loss_price and current_price <= position.stop_loss_price:

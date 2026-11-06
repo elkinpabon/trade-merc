@@ -224,6 +224,10 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             # Check Stop Loss / Take Profit
                             sl_tp_check = risk_svc.check_stop_loss_take_profit(symbol, current_price)
                             if sl_tp_check:
+                                if sl_tp_check.get('trigger') == 'DUST':
+                                    # Keep the unsold balance open and valued; no fake fill or retry.
+                                    processed_count += 1
+                                    continue
                                 reason = sl_tp_check['reason']
                                 print(f"[RISK EXIT] {reason} for {symbol}")
                                 close_res = executor.close_position(symbol, current_price, reason=reason)

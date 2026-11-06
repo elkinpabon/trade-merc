@@ -16,6 +16,7 @@ from app.services.risk_service import RiskService
 from app.services.model_service import ModelService
 from worker.bot_runner import recover_stale_submitted_signals
 from app.utils.helpers import generate_uuid, utc_now
+from app.utils.helpers import round_qty
 
 
 class PaperTradingTestCase(unittest.TestCase):
@@ -51,6 +52,27 @@ class PaperTradingTestCase(unittest.TestCase):
 
         self.assertTrue(allowed, reason)
         self.assertAlmostEqual(quantity, 0.125)
+
+    def test_decimal_quantity_rounding_does_not_create_phantom_remainder(self):
+        self.assertEqual(round_qty(2.3, 2), 2.3)
+        self.assertEqual(round_qty(2.309, 2), 2.30)
+
+    def test_unsellable_residual_remains_open_and_is_audited_once(self):
+        from app.models import RiskEvent, SymbolRule
+        position = PaperPosition(id=generate_uuid(), symbol='UNI/USDT', quantity=0.01,
+                                 entry_price=7.153, current_price=7.0, stop_loss_price=7.067,
+                                 entry_fee_amount=0.00007174, is_open=True)
+        db.session.add_all([position, SymbolRule(symbol='UNI/USDT', min_notional=5, min_qty=0.01, qty_precision=2)])
+        db.session.commit()
+        service = RiskService(self.config)
+        self.assertEqual(service.check_stop_loss_take_profit('UNI/USDT', 6.95)['trigger'], 'DUST')
+        self.assertEqual(service.check_stop_loss_take_profit('UNI/USDT', 6.94)['trigger'], 'DUST')
+        self.assertTrue(position.is_open)
+        self.assertAlmostEqual(position.quantity, 0.01)
+        self.assertAlmostEqual(position.current_price, 6.94)
+        self.assertEqual(RiskEvent.query.filter_by(event_type='PAPER_DUST').count(), 1)
+        self.assertEqual(PaperOrder.query.count(), 0)
+        self.assertEqual(Trade.query.count(), 0)
 
     def test_paper_trade_is_idempotent_and_counts_both_fees(self):
         signal_id = generate_uuid()
