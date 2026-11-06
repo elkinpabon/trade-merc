@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Activity, Radar, Wallet, ArrowUpRight, ArrowDownRight, ArrowRight, Check,
   CircleHelp, Clock3, Compass, Database, ExternalLink, Layers3, LayoutDashboard,
   ListFilter, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Target,
-  TrendingUp, X, Zap, AlertTriangle, CircleDot, Menu } from 'lucide-react';
+  TrendingUp, X, Zap, AlertTriangle, CircleDot, Menu, LockKeyhole, LogOut } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 import './style.css';
 
@@ -21,6 +21,27 @@ async function fetchJson(path, signal) {
   const response = await fetch(path, { signal, cache:'no-store' });
   if (!response.ok) throw new Error(`Servicio no disponible (${response.status})`);
   return response.json();
+}
+
+function Login({onLogin}) {
+  const [username,setUsername]=useState('elkinpabon');
+  const [pin,setPin]=useState('');
+  const [error,setError]=useState('');
+  const [busy,setBusy]=useState(false);
+  const submit=async e=>{e.preventDefault();setBusy(true);setError('');try{await onLogin(username,pin);}
+    catch(err){setError(err.message);}finally{setBusy(false);}};
+  return <main className="login-shell"><section className="login-card">
+    <div className="login-brand"><span className="brand-mark"><Activity size={25}/></span><div><strong>TRADEMERC</strong><small>Mercado</small></div></div>
+    <div className="login-icon"><LockKeyhole size={22}/></div>
+    <h1>Iniciar sesión</h1><p>Accede a tu cuenta paper de Binance Spot.</p>
+    <form onSubmit={submit}>
+      <label htmlFor="username">Usuario</label><input autoComplete="username" id="username" value={username} onChange={e=>setUsername(e.target.value)} required/>
+      <label htmlFor="pin">PIN</label><input autoComplete="current-password" id="pin" type="password" inputMode="numeric" maxLength="64" value={pin} onChange={e=>setPin(e.target.value)} required/>
+      {error&&<div className="login-error" role="alert">{error}</div>}
+      <button className="login-submit" disabled={busy}>{busy?'Verificando…':'Continuar'}</button>
+    </form>
+    <div className="login-foot"><ShieldCheck size={15}/> Sesión privada · operaciones simuladas</div>
+  </section></main>;
 }
 
 function Asset({symbol, base}) {
@@ -53,6 +74,7 @@ function Chart({overview}) {
 function App() {
   const [view,setView] = useState('overview');
   const [data,setData] = useState(null);
+  const [authenticated,setAuthenticated] = useState(null);
   const [error,setError] = useState(null);
   const [refresh,setRefresh] = useState(0);
   const [search,setSearch] = useState('');
@@ -60,16 +82,18 @@ function App() {
   const [selected,setSelected] = useState(null);
   const [mobile,setMobile] = useState(false);
   const [clock,setClock] = useState(Date.now());
+  useEffect(()=>{let active=true;fetchJson('/api/auth/status').then(s=>{if(active)setAuthenticated(s.authenticated);}).catch(()=>{if(active)setAuthenticated(false);});return()=>{active=false;};},[]);
   useEffect(()=>{
+    if(authenticated!==true)return;
     let busy=false, active=true;
     const controller=new AbortController();
     const load=async()=>{if(busy)return;busy=true;try{
       const [overview,opportunities,market,activity]=await Promise.all(['/api/overview','/api/opportunities','/api/market','/api/activity'].map(p=>fetchJson(p,controller.signal)));
       if(active){setData({overview,opportunities,market,activity});setError(null);}
-    }catch(e){if(active && e.name!=='AbortError')setError(e.message);}finally{busy=false;}};
+    }catch(e){if(active && e.name!=='AbortError'){if(e.message.includes('(401)'))setAuthenticated(false);setError(e.message);}}finally{busy=false;}};
     load(); const id=setInterval(load,5000);
     return()=>{active=false;clearInterval(id);controller.abort();};
-  },[refresh]);
+  },[refresh,authenticated]);
   useEffect(()=>{const id=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(id);},[]);
   useEffect(()=>{const fn=e=>{if(e.key==='Escape')setSelected(null);};window.addEventListener('keydown',fn);return()=>window.removeEventListener('keydown',fn);},[]);
   const o=data?.overview, a=o?.account;
@@ -82,6 +106,11 @@ function App() {
   const online=!error && o?.health==='ONLINE' && clock-o.at<30000;
   const open=o?.positions?.[0];
   const setupCount=rows.filter(r=>r.eligible).length;
+  const signIn=async(username,pin)=>{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,pin})});const body=await res.json();if(!res.ok)throw new Error(body.detail||'No se pudo iniciar sesión');setAuthenticated(true);setRefresh(x=>x+1);};
+  const signOut=async()=>{await fetch('/api/auth/logout',{method:'POST'});setAuthenticated(false);setData(null);};
+
+  if(authenticated===null)return <div className="auth-loading"><span className="brand-mark"><Activity size={22}/></span><span>TRADEMERC</span></div>;
+  if(authenticated===false)return <Login onLogin={signIn}/>;
 
   return <div className="shell">
     <aside className={`sidebar ${mobile?'is-open':''}`}>
@@ -93,7 +122,7 @@ function App() {
       <div className="sidebar-bottom"><span className={`live-dot ${online?'':'warning'}`}/><span>{online?'Sistemas conectados':'Comprobando conexión'}</span><Database size={14}/></div>
     </aside>
     <div className="main">
-      <header className="topbar"><div className="breadcrumbs"><button className="icon-button mobile-toggle" aria-label="Abrir menú" onClick={()=>setMobile(!mobile)}><Menu size={20}/></button><span>Workspace</span><span className="slash">/</span><strong>{nav.find(n=>n[0]===view)[2]}</strong></div><div className="top-actions"><span className="clock"><Clock3 size={13}/>{new Date(clock).toLocaleTimeString('es-EC')}</span><Tag tone={online?'green':'amber'}><span className={`live-dot ${online?'':'warning'}`}/>{online?'En línea':o?.health==='WARMING'?'Preparando':'Verificando'}</Tag><button className="icon-button" title="Actualizar" aria-label="Actualizar datos" onClick={()=>setRefresh(x=>x+1)}><RefreshCw size={16}/></button><span className="avatar">E</span></div></header>
+      <header className="topbar"><div className="breadcrumbs"><button className="icon-button mobile-toggle" aria-label="Abrir menú" onClick={()=>setMobile(!mobile)}><Menu size={20}/></button><span>Cuenta</span><span className="slash">/</span><strong>{nav.find(n=>n[0]===view)[2]}</strong></div><div className="top-actions"><span className="clock"><Clock3 size={13}/>{new Date(clock).toLocaleTimeString('es-EC')}</span><Tag tone={online?'green':'amber'}><span className={`live-dot ${online?'':'warning'}`}/>{online?'En línea':o?.health==='WARMING'?'Preparando':'Verificando'}</Tag><button className="icon-button" title="Actualizar" aria-label="Actualizar datos" onClick={()=>setRefresh(x=>x+1)}><RefreshCw size={16}/></button><button className="icon-button logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={16}/></button></div></header>
       <main>
         {error&&<div role="alert" className="alert"><AlertTriangle size={17}/>{error}. {data?'Se muestran los últimos datos recibidos; pueden estar obsoletos.':'Reintentando conexión automáticamente.'}</div>}
         <div className="page-heading"><div><h1>{({overview:'Resumen',scanner:'Mercado',portfolio:'Cartera',decisions:'Actividad',strategy:'Estrategia'})[view]}</h1><p>{({overview:'Balance, mercado y operaciones.',scanner:'Pares USDT, liquidez y señales de entrada.',portfolio:'Posiciones y saldo de la cuenta paper.',decisions:'Entradas, descartes y condiciones evaluadas.',strategy:'Parámetros de momentum intradía.'})[view]}</p></div><button className="secondary-button" onClick={()=>move(view==='strategy'?'overview':'strategy')}><SlidersHorizontal size={15}/>{view==='strategy'?'Volver al resumen':'Ver estrategia'}</button></div>

@@ -9,7 +9,7 @@ User=elkin
 WorkingDirectory=/home/elkin/pulse-market
 EnvironmentFile=/home/elkin/.config/pulse-market/service.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/elkin/pulse-market/.venv/bin/python -m uvicorn pulse.api:app --host 0.0.0.0 --port 3400 --workers 1
+ExecStart=/home/elkin/pulse-market/.venv/bin/python -m uvicorn pulse.api:app --host 127.0.0.1 --port 3400 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=15
 TimeoutStopSec=50
@@ -17,6 +17,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 MemoryMax=1200M
 CPUQuota=150%
+ProtectSystem=strict
+ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target

@@ -1,10 +1,30 @@
 import { test, expect } from '@playwright/test';
 
+async function login(page){
+  await page.goto('/');
+  if(await page.getByLabel('PIN').count()){
+    const pin=process.env.PULSE_E2E_PIN;
+    if(!pin)throw new Error('Set PULSE_E2E_PIN only in the local Playwright environment');
+    await page.getByLabel('PIN').fill(pin);
+    await page.getByRole('button',{name:'Continuar'}).click();
+  }
+  await expect(page.getByText('Patrimonio paper',{exact:true})).toBeVisible();
+}
+
+test('unauthenticated requests blocked and invalid PIN rejected',async({page})=>{
+  expect((await page.request.get('/api/overview')).status()).toBe(401);
+  await page.goto('/');
+  await expect(page.getByRole('heading',{name:'Iniciar sesión'})).toBeVisible();
+  await page.getByLabel('PIN').fill('wrong-pin');
+  await page.getByRole('button',{name:'Continuar'}).click();
+  await expect(page.getByRole('alert')).toContainText('incorrectos');
+  expect((await page.request.get('/api/overview')).status()).toBe(401);
+});
+
 test('real market dashboard, navigation, search and decision drawer', async ({page})=>{
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');
-  await expect(page.getByText('Patrimonio paper',{exact:true})).toBeVisible();
+  await login(page);
   await expect(page.getByRole('link', {name:'TRADEMERC Mercado'})).toBeVisible();
   await expect(page).toHaveTitle('TRADEMERC — Mercado');
   await page.screenshot({path:'test-results/pulse-desktop.png',fullPage:true});
@@ -30,8 +50,7 @@ test('real market dashboard, navigation, search and decision drawer', async ({pa
 
 test('mobile overview fits viewport and menu opens',async({page})=>{
   await page.setViewportSize({width:390,height:844});
-  await page.goto('/');
-  await expect(page.getByText('Patrimonio paper',{exact:true})).toBeVisible();
+  await login(page);
   const widths=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:window.innerWidth}));
   expect(widths.scroll).toBeLessThanOrEqual(widths.width);
   await page.screenshot({path:'test-results/pulse-mobile.png',fullPage:true});

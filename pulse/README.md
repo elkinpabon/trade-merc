@@ -76,6 +76,11 @@ gestiona un único proceso. Las transacciones bloquean la cuenta para movimiento
 - `/api/opportunities`: último barrido, filtros y errores.
 - `/api/activity`: diario de decisiones y trades.
 - `/api/health`: salud de monitor y scanner con control de antigüedad.
+- Login de un solo operador: `PULSE_LOGIN_USER`, `PULSE_LOGIN_PIN_HASH` y
+  `PULSE_SESSION_SECRET`; cookie HttpOnly/SameSite Strict de 12 horas y bloqueo
+  temporal tras 6 intentos fallidos en 10 minutos.
+- En la VPS el PIN se conserva como hash PBKDF2; Caddy da HTTPS antes de servir
+  el login. No publicar el puerto backend 3400 directamente.
 
 Sin panel de administración público; para pausar: `sudo systemctl stop pulse-market`.
 Al detener se detiene también la simulación de salidas. La cuenta persiste al
@@ -85,6 +90,6 @@ reiniciar. Un experimento nuevo requiere otra base, no borrar la anterior.
 
 Base MySQL exclusiva `pulse_market`, usuario local de esa base; variables fuera
 del repositorio en `/home/elkin/.config/pulse-market/service.env` (modo 600).
-Servicio `deploy/pulse-market.service`, puerto 3400. A/B/C no se detienen.
-Una URL HTTP por IP puede servir para este panel paper de solo lectura; para
-autenticación o futuras acciones administrativas utilizar dominio y HTTPS.
+Servicio `deploy/pulse-market.service` en 127.0.0.1:3400 detrás de Caddy.
+URL: https://212-56-34-67.sslip.io. No abrir el puerto interno 3400.
+A/B/C no se detienen.
