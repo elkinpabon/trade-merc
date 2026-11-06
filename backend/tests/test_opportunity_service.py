@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -36,6 +37,23 @@ class OpportunityTest(unittest.TestCase):
         self.assertFalse(OpportunityService.decide('relative-breakout-v1', frame, hourly, four, ticker, 6)['eligible'])
         self.assertFalse(OpportunityService.decide('relative-breakout-v1', frame, hourly, four, {**ticker, 'ask': 102}, 1)['eligible'])
         self.assertFalse(OpportunityService.decide('relative-breakout-v1', frame, hourly, four, {**ticker, 'quote_volume': 10}, 1)['eligible'])
+
+    def test_range_reversion_requires_recovery_and_cost_headroom(self):
+        frame = self.frame(15)
+        frame.loc[118, 'close'] = 96.0
+        frame.loc[119, 'close'] = 97.0
+        ticker = {'bid': 96.99, 'ask': 97.01, 'quote_volume': 50_000_000}
+        middle = pd.Series([100.0] * 120)
+        lower = pd.Series([96.5] * 120)
+        rsi = pd.Series([35.0] * 119 + [38.0])
+        with patch('app.services.opportunity_service.IndicatorService.calculate_adx', return_value=pd.Series([15.0] * 120)), \
+                patch('app.services.opportunity_service.IndicatorService.calculate_bollinger_bands', return_value=(middle + 3, middle, lower)), \
+                patch('app.services.opportunity_service.IndicatorService.calculate_rsi', return_value=rsi):
+            decision = OpportunityService.decide('range-reversion-v1', frame, self.frame(60), self.frame(240), ticker, 12)
+            self.assertTrue(decision['eligible'], decision)
+            expensive = OpportunityService.decide('range-reversion-v1', frame, self.frame(60), self.frame(240), ticker, 12, round_trip_cost_pct=1.0)
+            self.assertFalse(expensive['eligible'])
+            self.assertFalse(expensive['checks']['cost_headroom'])
 
     def test_missing_history_and_forming_candle_are_not_tradeable(self):
         frame = self.frame(15)

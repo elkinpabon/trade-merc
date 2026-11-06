@@ -86,8 +86,8 @@ export const Navbar: React.FC = () => {
           <img src="/icon.png" alt="TRADEMERC Logo" className="h-5 w-5 object-contain" />
           <span className="font-bold text-xs font-mono">{timeStr}</span>
           <span className="text-slate-300 font-mono text-[10px] sm:text-[11px] truncate">| TRADEMERC.EXE</span>
-          <span className={`px-2 py-1 font-mono text-[10px] font-bold ${process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps' ? 'bg-orange-300 text-black' : 'bg-sky-200 text-black'}`}>
-            {process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps'
+          <span className={`px-2 py-1 font-mono text-[10px] font-bold ${process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps-c' ? 'bg-purple-300 text-black' : process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps' ? 'bg-orange-300 text-black' : 'bg-sky-200 text-black'}`}>
+            {process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps-c' ? 'VPS · MYSQL · REVERSIÓN · PAPER C' : process.env.NEXT_PUBLIC_DEPLOYMENT_VARIANT === 'vps'
               ? 'VPS · MYSQL · RUPTURA / MOMENTUM · PAPER B'
               : 'GITHUB · TIDB · PAPER A'}
           </span>

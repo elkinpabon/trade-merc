@@ -1,0 +1,18 @@
+[Unit]
+Description=TRADEMERC VPS paper C panel
+After=network-online.target mysql.service
+
+[Service]
+Type=simple
+User=elkin
+WorkingDirectory=/home/elkin/trademerc-vps-c/frontend
+EnvironmentFile=/home/elkin/.config/trademerc-vps-c/frontend.env
+Environment=NODE_ENV=production
+ExecStart=/opt/trademerc-node/bin/node node_modules/next/dist/bin/next start -p 3200 -H 0.0.0.0
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

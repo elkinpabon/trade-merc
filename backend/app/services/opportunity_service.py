@@ -9,7 +9,7 @@ from app.services.indicator_service import IndicatorService
 from app.utils.helpers import generate_uuid, utc_now
 
 
-PROFILES = ('trend-pullback-v2', 'relative-breakout-v1')
+PROFILES = ('trend-pullback-v2', 'relative-breakout-v1', 'range-reversion-v1')
 
 
 class OpportunityService:
@@ -34,7 +34,8 @@ class OpportunityService:
         if not math.isfinite(atr) or atr <= 0 or price <= 0:
             raise ValueError('Invalid ATR or price')
         stop_pct = max(1.0, 2.0 * atr / price * 100.0)
-        reward_risk = 2.5 if profile == 'trend-pullback-v2' else 3.0
+        reward_risk = {'trend-pullback-v2': 2.5, 'relative-breakout-v1': 3.0,
+                       'range-reversion-v1': 2.0}[profile]
         tp_pct = stop_pct * reward_risk
         bid, ask = float(ticker.get('bid') or 0), float(ticker.get('ask') or 0)
         spread_pct = (ask - bid) / bid * 100 if bid > 0 and ask >= bid else float('inf')
@@ -53,6 +54,36 @@ class OpportunityService:
         breakout = (price > float(frame['high'].iloc[-21:-1].max())
                     and price - float(frame['high'].iloc[-21:-1].max()) <= atr
                     and relative_rank <= 5)
+        if profile == 'range-reversion-v1':
+            # A distinct hypothesis, not a fitted probability or profit guarantee.
+            hourly_adx = float(IndicatorService.calculate_adx(hourly).iloc[-1])
+            four_close = float(four_hourly.iloc[-1]['close'])
+            regime = (hourly_adx < 22 and four_close >= float(four_ema50.iloc[-1]) * 0.97
+                      and four_ema50.iloc[-1] >= four_ema50.iloc[-5] * 0.995)
+            _, middle, lower = IndicatorService.calculate_bollinger_bands(frame['close'])
+            rsi = IndicatorService.calculate_rsi(frame['close'])
+            setup = (float(previous['close']) < float(lower.iloc[-2])
+                     and price > float(lower.iloc[-1]) and price < float(middle.iloc[-1])
+                     and 25 <= float(rsi.iloc[-2]) <= 40 and float(rsi.iloc[-1]) > float(rsi.iloc[-2]))
+            reward_to_mid = (float(middle.iloc[-1]) - price) / price * 100
+            checks = {
+                'liquidity': float(ticker.get('quote_volume') or 0) >= 20_000_000,
+                'spread': spread_pct <= 0.10,
+                'cost_headroom': reward_to_mid >= 5 * (round_trip_cost_pct + spread_pct),
+                # Reused by the exit path: false means the regime thesis has failed.
+                'trend_1h_4h': bool(regime),
+                'volatility': 1.0 <= stop_pct <= 2.5,
+                'setup': bool(setup),
+            }
+            return {
+                'profile': profile, 'eligible': all(checks.values()), 'checks': checks,
+                'stop_loss_pct': stop_pct, 'take_profit_pct': tp_pct,
+                'spread_pct': spread_pct if math.isfinite(spread_pct) else None,
+                'round_trip_cost_pct': round_trip_cost_pct, 'relative_rank': relative_rank,
+                'quote_volume': float(ticker.get('quote_volume') or 0),
+                'hourly_adx': hourly_adx, 'rsi': float(rsi.iloc[-1]),
+                'reward_to_middle_pct': reward_to_mid,
+            }
         checks = {
             'liquidity': float(ticker.get('quote_volume') or 0) >= 20_000_000,
             'spread': spread_pct <= 0.10,

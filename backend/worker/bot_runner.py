@@ -90,6 +90,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
         processed_count = 0
         lock_connection = None
         lock_acquired = False
+        lock_name = os.environ.get('WORKER_LOCK_NAME', 'trademerc:bot-worker-cycle')
         with app.app_context():
             try:
                 if db.engine.dialect.name.startswith('mysql'):
@@ -97,7 +98,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                         lock_connection = db.engine.connect()
                         lock_acquired = lock_connection.execute(
                             db.text("SELECT GET_LOCK(:name, 0)"),
-                            {"name": "trademerc:bot-worker-cycle"},
+                            {"name": lock_name},
                         ).scalar() == 1
                     except Exception as lock_error:
                         if lock_connection:
@@ -471,7 +472,7 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                         if lock_acquired:
                             lock_connection.execute(
                                 db.text("SELECT RELEASE_LOCK(:name)"),
-                                {"name": "trademerc:bot-worker-cycle"},
+                                {"name": lock_name},
                             )
                     except Exception as release_error:
                         print(f"Unable to release MySQL cycle lock: {release_error}")
