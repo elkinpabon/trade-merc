@@ -2,13 +2,21 @@ import { test, expect } from '@playwright/test';
 
 async function login(page){
   await page.goto('/');
-  if(await page.getByLabel('PIN').count()){
+  await page.waitForFunction(()=>document.querySelector('#pin') ||
+    [...document.querySelectorAll('h1')].some(h=>h.textContent==='Resumen'),null,{timeout:15000});
+  if(await page.locator('#pin').count()){
     const pin=process.env.PULSE_E2E_PIN;
     if(!pin)throw new Error('Set PULSE_E2E_PIN only in the local Playwright environment');
     await page.getByLabel('PIN').fill(pin);
+    const loginResponse=page.waitForResponse(r=>r.url().endsWith('/api/auth/login'));
     await page.getByRole('button',{name:'Continuar'}).click();
+    const response=await loginResponse;
+    if(!response.ok())throw new Error(`Login rejected (${response.status()}): ${(await response.text()).slice(0,160)}`);
+    const auth=await page.evaluate(async()=>{const r=await fetch('/api/auth/status');return {status:r.status,body:await r.text()};});
+    if(!JSON.parse(auth.body).authenticated)throw new Error(`Browser session not accepted: ${auth.status} ${auth.body}`);
   }
-  await expect(page.getByText('Patrimonio paper',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Resumen'})).toBeVisible({timeout:20000});
+  await expect(page.getByText('Patrimonio paper',{exact:true})).toBeVisible({timeout:20000});
 }
 
 test('unauthenticated requests blocked and invalid PIN rejected',async({page})=>{
