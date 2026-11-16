@@ -10,6 +10,7 @@ from app.utils.helpers import generate_uuid, utc_now
 
 
 PROFILES = ('trend-pullback-v2', 'relative-breakout-v1')
+DECISION_REVISION = 'paper-audit-2026-11-16'
 
 
 class OpportunityService:
@@ -64,6 +65,7 @@ class OpportunityService:
             'setup': bool(pullback if profile == 'trend-pullback-v2' else breakout),
         }
         return {
+            'implementation_revision': DECISION_REVISION,
             'profile': profile, 'eligible': all(checks.values()), 'checks': checks,
             'stop_loss_pct': stop_pct, 'take_profit_pct': tp_pct,
             'spread_pct': spread_pct if math.isfinite(spread_pct) else None,
@@ -77,15 +79,16 @@ class OpportunityService:
     @staticmethod
     def signal(config, symbol, bot_run_id, frame, decision):
         position = PaperPosition.query.filter_by(symbol=symbol, is_open=True).first()
-        last = Signal.query.filter_by(symbol=symbol).order_by(Signal.timestamp.desc()).first()
-        if last and (utc_now() - last.timestamp).total_seconds() < config.cooldown_seconds:
-            return None
         if position:
             # No noisy 15m score exits: exit on confirmed higher-timeframe trend loss.
             if decision['checks']['trend_1h_4h']:
                 return None
             side, action = 'SELL', 'EXIT_LONG'
         elif decision['eligible']:
+            # Cooldown limits new entries, never protective thesis exits.
+            last = Signal.query.filter_by(symbol=symbol).order_by(Signal.timestamp.desc()).first()
+            if last and (utc_now() - last.timestamp).total_seconds() < config.cooldown_seconds:
+                return None
             side, action = 'BUY', 'ENTER_LONG'
         else:
             return None
