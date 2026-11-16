@@ -46,6 +46,16 @@ Los $50 son saldo simulado, no una cuenta conectada a Binance.
 
 ## Límites de la simulación
 
+Protección adicional `net-cost-and-loss-guard-v1`: con al menos 20 cierres y
+resultado neto negativo en los últimos 30, se suspenden entradas nuevas. El panel
+lo indica; escaneo, valoraciones y salidas continúan. No se reinician saldos ni
+se habilitan compras limpiando contadores. Cambiar de estrategia requiere una
+validación nueva. Al activar el trailing a 1R, el nivel de equilibrio incorpora
+ambas comisiones y el slippage de salida; gaps/latencia pueden causar pérdidas.
+Las velas cerradas observadas del universo escaneado se guardan de forma
+idempotente en `pulse_research_candles`, con hora de observación, para investigación
+futura. Esto no convierte datos ya inspeccionados en una prueba fuera de muestra.
+
 Cotizaciones observadas, no fills reales; no reproduce colas, fills parciales,
 comisiones en BNB/base, todos los filtros por cuenta ni impacto extremo. Los stops
 se comprueban al observar precios, no en el exchange; gaps pueden exceder riesgo.

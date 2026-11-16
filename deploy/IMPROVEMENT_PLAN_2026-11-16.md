@@ -96,3 +96,20 @@ no existe promoción automática ni una ruta de ejecución de la candidata.
 - Mercado muestra el motivo de pausa explícitamente en el panel, sin confundirlo
   con una caída del servicio. Reactivar exige evidencia y una decisión explícita
   sobre una estrategia nueva, no limpiar contadores ni ocultar pérdidas.
+
+### Comprobación en producción
+
+- B, código `0571652`: ciclo del 16/11 a las 03:46 UTC, SUCCESS; evaluaciones
+  nuevas contienen `protected-v1-shadow-2026-11-16`, modo SHADOW y permiso de
+  órdenes false. Se ejecutaron también las 57 pruebas en la VPS contra SQLite.
+- Mercado, código `dcabed6`: backup de código/build anterior, esquema de journal
+  aditivo, 15 pruebas en VPS y reinicio únicamente de `pulse-market`.
+- API real autenticada: ONLINE; protección activa, últimos 30 cierres
+  -2.728103905445 USDT y PF 0.1734142991. Cash conservado en 38.964767128138 USDT;
+  saldo inicial 50 y ASTER abierto, sin reinicializar cuenta. Equity varía con bid.
+- Journal verificado: 2.970 velas de 30 símbolos poco después del despliegue.
+- Revisión del panel autenticado en escritorio y móvil de 390px: aviso de pausa,
+  navegación, búsqueda, drawer/Escape y sin overflow. API sin sesión devuelve 401.
+- A: relevo del bloque anterior realizado con cuenta plana y sin ciclo en marcha;
+  bloque Actions `43800263933` usa SHA `dcabed6` (código de ejecución `79a8345`).
+  No se toca el workflow/worker de C ni se activa el overlay investigado.
