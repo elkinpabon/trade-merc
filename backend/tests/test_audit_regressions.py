@@ -54,6 +54,13 @@ class AuditRegressionTests(unittest.TestCase):
         self.assertIsNone(OpportunityService.signal(self.config, 'ETH/USDT', 'run',
                            pd.DataFrame({'close': [100]}), {'eligible': True}))
 
+    def test_rejected_signal_does_not_start_a_trade_cooldown(self):
+        self.recent_signal(status='REJECTED')
+        result = OpportunityService.signal(self.config, 'ETH/USDT', 'run',
+                                           pd.DataFrame({'close': [100]}), {'eligible': True})
+        self.assertIsNotNone(result)
+        self.assertEqual(result.action, 'ENTER_LONG')
+
     def test_equal_directional_moves_do_not_create_false_adx_trend(self):
         frame = pd.DataFrame({'high': [101+i for i in range(60)],
                               'low': [99-i for i in range(60)], 'close': [100]*60})

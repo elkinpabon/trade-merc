@@ -40,8 +40,8 @@ class MarketDataService:
                 parsed_tickers[symbol] = {
                     'symbol': symbol,
                     'last': last_price,
-                    'bid': float(ticker.get('bidPrice') or last_price),
-                    'ask': float(ticker.get('askPrice') or last_price),
+                    'bid': float(ticker.get('bidPrice') or 0.0),
+                    'ask': float(ticker.get('askPrice') or 0.0),
                     'high': float(ticker.get('highPrice') or last_price),
                     'low': float(ticker.get('lowPrice') or last_price),
                     'volume': float(ticker.get('volume') or 0.0),
@@ -58,8 +58,8 @@ class MarketDataService:
                 symbol: {
                     'symbol': symbol,
                     'last': float(ticker.get('last') or ticker.get('close') or 0.0),
-                    'bid': float(ticker.get('bid') or ticker.get('last') or 0.0),
-                    'ask': float(ticker.get('ask') or ticker.get('last') or 0.0),
+                    'bid': float(ticker.get('bid') or 0.0),
+                    'ask': float(ticker.get('ask') or 0.0),
                     'high': float(ticker.get('high') or ticker.get('last') or 0.0),
                     'low': float(ticker.get('low') or ticker.get('last') or 0.0),
                     'volume': float(ticker.get('baseVolume') or 0.0),

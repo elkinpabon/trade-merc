@@ -1,11 +1,12 @@
 import os
+import json
 import time
 import traceback
 from datetime import datetime, timedelta
 from flask import Flask
 from app import create_app
 from app.extensions import db
-from app.models import BotConfig, BotRun, ModelVersion, PaperPosition, PaperOrder, Signal, WorkerCycle
+from app.models import BotConfig, BotRun, ModelVersion, PaperPosition, PaperOrder, Signal, WorkerCycle, SymbolRule
 from app.services import (
     MarketDataService,
     SymbolRulesService,
@@ -24,6 +25,8 @@ from app.services.execution import PaperExecutionEngine, LiveExecutionEngine
 from app.sockets import broadcast_event
 from app.utils.helpers import utc_now
 from app.services.experiment_service import ExperimentService
+from app.services.execution_quotes import executable_price
+from app.services.shadow_research import benchmark_context, candidate_intent
 from app.services.opportunity_service import OpportunityService, PROFILES
 from app.utils.helpers import generate_uuid
 
@@ -203,6 +206,16 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 relative_ranks = {symbol: rank + 1 for rank, symbol in enumerate(ranked)}
                 if config.strategy_key in PROFILES:
                     top_candidates.sort(key=lambda symbol: relative_ranks.get(symbol, 999))
+                benchmark = {'status': 'UNAVAILABLE', 'reason': 'Not a research profile'}
+                if config.strategy_key in PROFILES:
+                    try:
+                        benchmark = benchmark_context(
+                            market_svc.get_ohlcv_dataframe('BTC/USDT', timeframe='1h', limit=200),
+                            market_svc.get_ohlcv_dataframe('BTC/USDT', timeframe='4h', limit=200))
+                    except Exception as exc:
+                        # Missing shadow inputs must never interrupt protective exits.
+                        db.session.rollback()
+                        benchmark = {'status': 'UNAVAILABLE', 'reason': str(exc)[:200]}
 
                 if all_tickers:
                     # 2. RUN MULTI-MARKET ANOMALY & PATTERN SCANNER
@@ -220,6 +233,11 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                             current_price = symbol_prices.get(symbol, 0.0)
                             if current_price <= 0:
                                 continue
+
+                            if config.strategy_key in PROFILES and symbol in open_position_symbols:
+                                quote = market_svc.fetch_all_tickers([symbol]).get(symbol, {})
+                                current_price = executable_price(quote, 'SELL')
+                                symbol_prices[symbol] = current_price
 
                             # Check Stop Loss / Take Profit
                             sl_tp_check = risk_svc.check_stop_loss_take_profit(symbol, current_price)
@@ -307,6 +325,11 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                                     all_tickers[symbol], relative_ranks.get(symbol, 999),
                                     round_trip_cost_pct=2 * (float(config.fee_pct) + float(config.slippage_pct)),
                                 )
+                                rule = SymbolRule.query.filter_by(symbol=symbol).first()
+                                decision['shadow_research'] = candidate_intent(
+                                    decision, benchmark, all_tickers[symbol], float(latest['close']),
+                                    {**rule.to_dict(), 'updated_at': rule.updated_at.isoformat() if rule.updated_at else None}
+                                    if rule else None)
                             evaluation = EvaluationService.record(
                                 config, active_run.id, symbol, timeframe, latest, score_data,
                                 model=frozen_model, **({'decision': decision} if decision else {}),
@@ -339,6 +362,21 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
 
                             if signal:
                                 EvaluationService.link_signal(evaluation, signal.id)
+                                if config.strategy_key in PROFILES:
+                                    # Candle work may take a minute. Never fill from the old
+                                    # batch's last-trade price or invent a zero spread.
+                                    quote = market_svc.fetch_all_tickers([symbol]).get(symbol, {})
+                                    try:
+                                        current_price = executable_price(quote, signal.type, signal.price)
+                                    except ValueError as exc:
+                                        signal.status = 'REJECTED'
+                                        signal.reason = (signal.reason or '') + f' | Quote rejected: {exc}'
+                                        db.session.commit()
+                                        processed_count += 1
+                                        continue
+                                    indicators = json.loads(signal.indicators_json or '{}')
+                                    indicators['execution_quote'] = quote
+                                    signal.indicators_json = json.dumps(indicators, allow_nan=False)
                                 broadcast_event('signal_created', signal.to_dict())
                                 LogService.log('INFO', 'StrategyEngine', f"Señal multi-factor: {signal.type} {symbol} a ${signal.price:.2f} (Score={total_score:.0f})")
 
