@@ -75,7 +75,10 @@ class ExperimentService:
         return True
 
     @classmethod
-    def start(cls, config, git_commit=None):
+    def start(cls, config, git_commit=None, *, allow_unvalidated_paper=False, commit=True, pilot_metadata=None):
+        from app.services.activity_profiles import PILOT_PROFILES, PILOT_LIMITS
+        if config.strategy_key in PILOT_PROFILES and not allow_unvalidated_paper:
+            raise ValueError('Activity pilots require explicit unvalidated PAPER authorization.')
         if PaperPosition.query.filter_by(is_open=True).count():
             raise ValueError('Cannot start an experiment while a paper position is open.')
         active_bot_runs = BotRun.query.filter_by(status='running').all()
@@ -111,6 +114,9 @@ class ExperimentService:
                 'duration_days': cls.DURATION_DAYS,
                 'minimum_coverage_pct': cls.MIN_COVERAGE_PCT,
                 'minimum_closed_trades': cls.MIN_CLOSED_TRADES,
+                **({'experiment_kind': 'EXPLORATORY_PAPER', 'profitability_validated': False,
+                    'pilot_policy': {**PILOT_LIMITS, **PILOT_PROFILES[config.strategy_key]},
+                    'pilot_metadata': pilot_metadata or {}} if config.strategy_key in PILOT_PROFILES else {}),
             }, sort_keys=True),
             config_snapshot_json=snapshot_json,
             git_commit=git_commit or cls.git_commit(),
@@ -124,7 +130,10 @@ class ExperimentService:
             total_equity=float(config.virtual_balance), realized_pnl=0.0, unrealized_pnl=0.0,
             peak_equity=float(config.virtual_balance), drawdown_pct=0.0, timestamp=now,
         ))
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         return run
 
     @staticmethod

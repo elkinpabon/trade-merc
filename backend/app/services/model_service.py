@@ -28,10 +28,15 @@ class ModelService:
             raise ValueError('Unknown strategy profile')
         model = ModelVersion.query.filter_by(model_name='rule_strategy', version=config.strategy_key).first()
         if not model:
+            from app.services.activity_profiles import PILOT_PROFILES, PILOT_LIMITS, REVISION
+            pilot = config.strategy_key in PILOT_PROFILES
             model = ModelVersion(
                 id=generate_uuid(), model_name='rule_strategy', version=config.strategy_key,
                 status='candidate', algorithm='deterministic_rules', feature_schema_json='[]',
-                parameters_json=json.dumps({'strategy_key': config.strategy_key}),
+                parameters_json=json.dumps({'strategy_key': config.strategy_key,
+                                            **({'implementation_revision': REVISION,
+                                                'pilot_policy': {**PILOT_LIMITS, **PILOT_PROFILES[config.strategy_key]}}
+                                               if pilot else {})}),
                 metrics_json=json.dumps({'validated_for_execution': False, 'source': 'paper rules, no probability estimate'}),
                 created_at=utc_now(),
             )

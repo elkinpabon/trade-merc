@@ -7,9 +7,10 @@ from app.extensions import db
 from app.models import PaperPosition, Signal
 from app.services.indicator_service import IndicatorService
 from app.utils.helpers import generate_uuid, utc_now
+from app.services.activity_profiles import PILOT_PROFILES, features, context, assess
 
 
-PROFILES = ('trend-pullback-v2', 'relative-breakout-v1')
+PROFILES = ('trend-pullback-v2', 'relative-breakout-v1') + tuple(PILOT_PROFILES)
 DECISION_REVISION = 'paper-audit-2026-11-16'
 
 
@@ -29,6 +30,13 @@ class OpportunityService:
             age = datetime.now(timezone.utc).timestamp() * 1000 - int(data.iloc[-1]['timestamp'])
             if age < minutes * 60_000 or age > 3 * minutes * 60_000:
                 raise ValueError('Stale or open candle in multi-timeframe decision')
+            if profile in PILOT_PROFILES:
+                timestamps = data['timestamp'].iloc[-100:].astype('int64')
+                if not timestamps.diff().iloc[1:].eq(minutes * 60_000).all():
+                    raise ValueError('Gaps in activity pilot closed candles')
+        if profile in PILOT_PROFILES:
+            return assess(profile, features(frame).iloc[-1], context(hourly).iloc[-1],
+                          context(four_hourly).iloc[-1], ticker, relative_rank, round_trip_cost_pct)
         latest, previous = frame.iloc[-1], frame.iloc[-2]
         price = float(latest['close'])
         atr = float(IndicatorService.calculate_atr(frame).iloc[-1])
@@ -86,7 +94,10 @@ class OpportunityService:
             side, action = 'SELL', 'EXIT_LONG'
         elif decision['eligible']:
             # Cooldown limits new entries, never protective thesis exits.
-            last = Signal.query.filter_by(symbol=symbol, status='EXECUTED').order_by(Signal.timestamp.desc()).first()
+            query = Signal.query.filter_by(symbol=symbol, status='EXECUTED')
+            if config.strategy_key in PILOT_PROFILES:
+                query = query.filter_by(bot_run_id=bot_run_id)
+            last = query.order_by(Signal.timestamp.desc()).first()
             if last and (utc_now() - last.timestamp).total_seconds() < config.cooldown_seconds:
                 return None
             side, action = 'BUY', 'ENTER_LONG'

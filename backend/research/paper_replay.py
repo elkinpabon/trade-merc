@@ -15,7 +15,7 @@ DAY_MS = 86_400_000
 VARIANTS = ('baseline', 'protected-v1')
 
 
-def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
+def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1., experiment_policy=None):
     if variant not in VARIANTS or cost_multiplier < 1:
         raise ValueError('Unknown variant or optimistic cost multiplier')
     start, end = start or data['start'], end or data['end']
@@ -27,6 +27,10 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
     trades, entries, gaps = [], [], 0
     blocks = defaultdict(int)
     decisions = sorted(data['decisions'], key=lambda d: (d['at'], d['symbol']))
+    policy = experiment_policy or {}
+    cooldown_ms = int(policy.get('cooldown_seconds', 14400) * 1000)
+    hold_ms = int(policy.get('max_hold_minutes', 1440 if variant == 'protected-v1' else 0) * 60_000)
+    day_key, day_equity, day_entries = None, 100., 0
     index = 0
     bars = defaultdict(dict)
     for b in data['candles']:
@@ -49,9 +53,13 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
         trades.append({'symbol': symbol, 'opened_at': p['at'], 'closed_at': timestamp,
                        'pnl': p['qty'] * (fill - p['entry']) - p['entry_fee'] - exit_fee,
                        'fees': p['entry_fee'] + exit_fee, 'reason': reason})
-        cooldown[symbol] = timestamp + 4 * 3600_000
+        cooldown[symbol] = timestamp + cooldown_ms
 
     for timestamp, market in sorted(bars.items()):
+        if timestamp // DAY_MS != day_key:
+            day_key = timestamp // DAY_MS
+            day_equity = cash + sum(p['qty']*p['mark'] for p in positions.values())
+            day_entries = 0
         ready = []
         while index < len(decisions) and decisions[index]['at'] <= timestamp:
             d = decisions[index]
@@ -67,17 +75,25 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
                 gaps += 1
                 continue
             p, b = positions[symbol], market[symbol]
+            if policy:
+                p['mark'] = b['open']  # observable at entry time, not this bar's future close
             if timestamp - p['last_bar'] != BAR_MS:
                 gaps += 1
             regime_at, regime = regimes.get(symbol, (0, True))
             if not regime and timestamp - regime_at <= 2 * BAR_MS:
                 close(symbol, b['open'], timestamp, 'REGIME')
-            elif variant == 'protected-v1' and timestamp - p['at'] >= DAY_MS:
+            elif hold_ms and timestamp - p['at'] >= hold_ms:
                 close(symbol, b['open'], timestamp, 'TIMEOUT')
         for d in sorted(ready, key=lambda d: (d['rank'], d['symbol'])):
             symbol = d['symbol']
             if symbol not in market or symbol in positions or len(positions) >= 2 or timestamp < cooldown.get(symbol, 0):
                 blocks['portfolio_or_cooldown'] += 1
+                continue
+            marked = cash + sum(p['qty']*p['mark'] for p in positions.values())
+            if policy and (day_entries >= policy['max_entries_per_day']
+                           or marked <= day_equity*(1-policy['daily_loss_pct']/100)
+                           or marked <= peak*(1-policy['max_drawdown_pct']/100)):
+                blocks['pilot_risk_limits'] += 1
                 continue
             if variant == 'protected-v1':
                 bt, bullish = regimes.get('BTC/USDT', (0, False))
@@ -89,7 +105,7 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
                 blocks['rules_or_spread'] += 1
                 continue
             b = market[symbol]
-            if variant == 'protected-v1' and abs(b['open'] / d['price'] - 1) > .003:
+            if (variant == 'protected-v1' or policy) and abs(b['open'] / d['price'] - 1) > .003:
                 blocks['entry_drift'] += 1
                 continue
             entry = b['open'] * (1 + spread / 200) * (1 + slip)
@@ -107,6 +123,7 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
                 continue
             entry_fee = qty * entry * fee
             cash -= qty * entry + entry_fee
+            day_entries += 1
             positions[symbol] = {'qty': qty, 'entry': entry, 'entry_fee': entry_fee,
                                  'spread': spread / 100, 'stop': entry * (1 - risk),
                                  'target': entry * (1 + target_pct), 'initial_risk': entry * risk,
@@ -126,10 +143,10 @@ def replay(data, variant='baseline', start=None, end=None, cost_multiplier=1.):
                 close(symbol, p['target'], timestamp + BAR_MS, 'TARGET')
             else:
                 p['mark'], p['last_bar'] = b['close'], timestamp
-                if variant == 'protected-v1' and b['high'] >= p['entry'] + p['initial_risk']:
+                if (variant == 'protected-v1' or policy) and b['high'] >= p['entry'] + p['initial_risk']:
                     # New trail becomes effective NEXT bar; no lookahead fill on this bar.
                     break_even = (p['entry'] + p['entry_fee'] / p['qty']) / ((1 - fee) * (1 - slip) * (1 - p['spread'] / 2))
-                    p['stop'] = max(p['stop'], break_even, b['high'] - p['initial_risk'])
+                    p['stop'] = max(p['stop'], break_even) if policy else max(p['stop'], break_even, b['high'] - p['initial_risk'])
         equity = cash + sum(p['qty'] * p['mark'] for p in positions.values())
         peak = max(peak, equity)
         drawdown = max(drawdown, (peak - equity) / peak * 100)

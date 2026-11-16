@@ -160,21 +160,24 @@ class WorkerOperationsTestCase(unittest.TestCase):
         self.assertEqual(worker['status'], 'DEGRADED')
         self.assertIn('stale', worker['details'])
 
-    def test_rule_order_uses_fresh_executable_ask_not_old_last_price(self):
+    def test_rule_order_uses_fresh_executable_ask_not_old_last_price(self, profile='relative-breakout-v1'):
         import json
         import pandas as pd
         from contextlib import ExitStack
         from app.models import Signal
         from app.services.model_service import ModelService
+        from app.services.activity_profiles import PILOT_PROFILES, PILOT_LIMITS
 
         config = self.add_config()
-        config.strategy_key = 'relative-breakout-v1'
+        config.strategy_key = profile
         model = ModelService.for_config(config)
         config.model_version_id = model.id
         db.session.add(BotRun(id='quote-run', config_id=config.id, status='running'))
         db.session.commit()
         experiment = SimpleNamespace(id='quote-experiment', model_version_id=model.id,
                                      config_snapshot_json='{}', planned_end_at=utc_now()+timedelta(days=30))
+        if profile in PILOT_PROFILES:
+            experiment.parameters_json=json.dumps({'pilot_policy':{**PILOT_LIMITS,**PILOT_PROFILES[profile]}})
         at = int(utc_now().replace(tzinfo=__import__('datetime').timezone.utc).timestamp()*1000)
         old = {'last':100., 'bid':99.99, 'ask':100., 'timestamp':at}
         fresh = {**old, 'bid':100.09, 'ask':100.10}
@@ -210,6 +213,11 @@ class WorkerOperationsTestCase(unittest.TestCase):
         signal = Signal.query.one()
         self.assertEqual(signal.status,'EXECUTED')
         self.assertEqual(json.loads(signal.indicators_json)['execution_quote']['ask'],100.10)
+        if profile in PILOT_PROFILES:
+            self.assertEqual(json.loads(signal.indicators_json)['opportunity']['paper_trial']['state'],'ACTIVE_EXPLORATORY_PAPER')
+
+    def test_authorized_pilot_can_actually_submit_a_paper_order(self):
+        self.test_rule_order_uses_fresh_executable_ask_not_old_last_price(profile='intraday-reclaim-paper-v1')
 
 
 if __name__ == '__main__':

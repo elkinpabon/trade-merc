@@ -13,14 +13,18 @@ def millis(value):
     return int(value.replace(tzinfo=timezone.utc).timestamp() * 1000)
 
 
-def dataset(connection):
+def dataset(connection, run_id=None):
     def query(sql, args=()):
         if not sql.startswith('SELECT '):
             raise ValueError('SELECT only')
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             cursor.execute(sql, args)
             return cursor.fetchall()
-    run = query("SELECT * FROM strategy_runs WHERE run_type='EXPERIMENT' ORDER BY started_at DESC LIMIT 1")[0]
+    runs = (query("SELECT * FROM strategy_runs WHERE id=%s AND run_type='EXPERIMENT' AND status='COMPLETED'", (run_id,))
+            if run_id else query("SELECT * FROM strategy_runs WHERE run_type='EXPERIMENT' AND status='COMPLETED' ORDER BY started_at DESC LIMIT 1"))
+    if not runs:
+        raise ValueError('No completed experiment matching requested export')
+    run = runs[0]
     end = run['finished_at'] or run['planned_end_at']
     if not run['finished_at']:
         raise ValueError('Export only completed A/B experiments')
@@ -37,19 +41,26 @@ def dataset(connection):
                           'eligible': bool(d['eligible']), 'regime': bool(d['checks']['trend_1h_4h']),
                           'stop_pct': d['stop_loss_pct'], 'target_pct': d['take_profit_pct'],
                           'spread_pct': d['spread_pct'], 'rank': d['relative_rank']})
+        decisions[-1]['quote_volume'] = d.get('quote_volume', 0)
     symbols = config['symbols'].split(',')
     placeholders = ','.join(['%s'] * len(symbols))
-    bars = query('SELECT symbol,timestamp,open,high,low,close FROM candles WHERE timeframe=%s AND '
+    bars = query('SELECT symbol,timestamp,open,high,low,close,volume FROM candles WHERE timeframe=%s AND '
                  f'symbol IN ({placeholders}) AND timestamp >= %s AND timestamp + 900000 <= %s ORDER BY timestamp,symbol',
-                 ('15m', *symbols, millis(run['started_at']) // 900000 * 900000, millis(end)))
+                 ('15m', *symbols, millis(run['started_at']) // 900000 * 900000 - 200*900000, millis(end)))
+    contexts = query('SELECT symbol,timeframe,timestamp,open,high,low,close,volume FROM candles '
+                     f"WHERE timeframe IN ('1h','4h') AND symbol IN ({placeholders}) AND timestamp >= %s "
+                     "AND timestamp + CASE WHEN timeframe='1h' THEN 3600000 ELSE 14400000 END <= %s ORDER BY symbol,timeframe,timestamp",
+                     (*symbols, millis(run['started_at'])-200*14400000, millis(end)))
     rules = query(f'SELECT symbol,min_notional,min_qty,qty_precision FROM symbol_rules WHERE symbol IN ({placeholders})', symbols)
-    return {'schema': 1, 'source_run': run['id'], 'profile': config['strategy_key'],
+    return {'schema': 2, 'source_run': run['id'], 'profile': config['strategy_key'],
             'start': millis(run['started_at']), 'end': millis(end),
             'previously_inspected': True, 'historical_books_available': False,
             'historical_rule_snapshots_available': False,
             'decisions': decisions,
             'candles': [{'symbol': b['symbol'], 'at': int(b['timestamp']),
-                         **{k: float(b[k]) for k in ('open', 'high', 'low', 'close')}} for b in bars],
+                         **{k: float(b[k]) for k in ('open', 'high', 'low', 'close', 'volume')}} for b in bars],
+            'context_candles': [{'symbol': b['symbol'], 'timeframe': b['timeframe'], 'timestamp': int(b['timestamp']),
+                                 **{k: float(b[k]) for k in ('open', 'high', 'low', 'close', 'volume')}} for b in contexts],
             'rules': {r['symbol']: {k: float(r[k]) for k in ('min_notional', 'min_qty', 'qty_precision')} for r in rules}}
 
 

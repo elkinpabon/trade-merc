@@ -27,6 +27,7 @@ from app.utils.helpers import utc_now
 from app.services.experiment_service import ExperimentService
 from app.services.execution_quotes import executable_price
 from app.services.shadow_research import benchmark_context, candidate_intent
+from app.services.activity_profiles import PILOT_PROFILES, PILOT_LIMITS
 from app.services.opportunity_service import OpportunityService, PROFILES
 from app.utils.helpers import generate_uuid
 
@@ -131,6 +132,10 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                 experiment = ExperimentService.active_run(config.id)
                 if experiment and not ExperimentService.config_unchanged(config, experiment.config_snapshot_json):
                     raise RuntimeError('Experiment configuration changed after the run was frozen.')
+                if experiment and config.strategy_key in PILOT_PROFILES:
+                    frozen_policy = json.loads(experiment.parameters_json).get('pilot_policy')
+                    if frozen_policy != {**PILOT_LIMITS, **PILOT_PROFILES[config.strategy_key]}:
+                        raise RuntimeError('Frozen pilot limits differ from this worker implementation')
                 frozen_model = (db.session.get(ModelVersion, experiment.model_version_id)
                                 if experiment else ModelService.for_config(config))
                 if not frozen_model:
@@ -325,11 +330,17 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                                     all_tickers[symbol], relative_ranks.get(symbol, 999),
                                     round_trip_cost_pct=2 * (float(config.fee_pct) + float(config.slippage_pct)),
                                 )
-                                rule = SymbolRule.query.filter_by(symbol=symbol).first()
-                                decision['shadow_research'] = candidate_intent(
-                                    decision, benchmark, all_tickers[symbol], float(latest['close']),
-                                    {**rule.to_dict(), 'updated_at': rule.updated_at.isoformat() if rule.updated_at else None}
-                                    if rule else None)
+                                if config.strategy_key in PILOT_PROFILES:
+                                    decision['paper_trial'] = {
+                                        'state': 'ACTIVE_EXPLORATORY_PAPER' if experiment else 'OBSERVATION_ONLY',
+                                        'experiment_id': experiment.id if experiment else None,
+                                        'real_money_allowed': False, 'profitability_validated': False}
+                                else:
+                                    rule = SymbolRule.query.filter_by(symbol=symbol).first()
+                                    decision['shadow_research'] = candidate_intent(
+                                        decision, benchmark, all_tickers[symbol], float(latest['close']),
+                                        {**rule.to_dict(), 'updated_at': rule.updated_at.isoformat() if rule.updated_at else None}
+                                        if rule else None)
                             evaluation = EvaluationService.record(
                                 config, active_run.id, symbol, timeframe, latest, score_data,
                                 model=frozen_model, **({'decision': decision} if decision else {}),
