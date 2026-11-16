@@ -59,13 +59,22 @@ class OpportunityService:
             # A distinct hypothesis, not a fitted probability or profit guarantee.
             hourly_adx = float(IndicatorService.calculate_adx(hourly).iloc[-1])
             four_close = float(four_hourly.iloc[-1]['close'])
-            regime = (hourly_adx < 22 and four_close >= float(four_ema50.iloc[-1]) * 0.97
-                      and four_ema50.iloc[-1] >= four_ema50.iloc[-5] * 0.995)
+            regime_checks = {
+                'hourly_adx_below_22': hourly_adx < 22,
+                'four_hour_price_stable': four_close >= float(four_ema50.iloc[-1]) * 0.97,
+                'four_hour_ema_stable': bool(four_ema50.iloc[-1] >= four_ema50.iloc[-5] * 0.995),
+            }
+            regime = all(regime_checks.values())
             _, middle, lower = IndicatorService.calculate_bollinger_bands(frame['close'])
             rsi = IndicatorService.calculate_rsi(frame['close'])
-            setup = (float(previous['close']) < float(lower.iloc[-2])
-                     and price > float(lower.iloc[-1]) and price < float(middle.iloc[-1])
-                     and 25 <= float(rsi.iloc[-2]) <= 40 and float(rsi.iloc[-1]) > float(rsi.iloc[-2]))
+            setup_checks = {
+                'previous_below_lower_band': float(previous['close']) < float(lower.iloc[-2]),
+                'recovered_lower_band': price > float(lower.iloc[-1]),
+                'below_middle_band': price < float(middle.iloc[-1]),
+                'previous_rsi_25_to_40': 25 <= float(rsi.iloc[-2]) <= 40,
+                'rsi_recovering': float(rsi.iloc[-1]) > float(rsi.iloc[-2]),
+            }
+            setup = all(setup_checks.values())
             reward_to_mid = (float(middle.iloc[-1]) - price) / price * 100
             checks = {
                 'liquidity': float(ticker.get('quote_volume') or 0) >= 20_000_000,
@@ -85,6 +94,9 @@ class OpportunityService:
                 'quote_volume': float(ticker.get('quote_volume') or 0),
                 'hourly_adx': hourly_adx, 'rsi': float(rsi.iloc[-1]),
                 'reward_to_middle_pct': reward_to_mid,
+                'minimum_reward_to_middle_pct': 5 * (round_trip_cost_pct + spread_pct) if math.isfinite(spread_pct) else None,
+                'regime_checks': regime_checks, 'setup_checks': setup_checks,
+                'blocked_by': [name for name, passed in checks.items() if not passed],
             }
         checks = {
             'liquidity': float(ticker.get('quote_volume') or 0) >= 20_000_000,

@@ -51,9 +51,31 @@ class OpportunityTest(unittest.TestCase):
                 patch('app.services.opportunity_service.IndicatorService.calculate_rsi', return_value=rsi):
             decision = OpportunityService.decide('range-reversion-v1', frame, self.frame(60), self.frame(240), ticker, 12)
             self.assertTrue(decision['eligible'], decision)
+            self.assertEqual(decision['blocked_by'], [])
+            self.assertTrue(all(decision['regime_checks'].values()))
+            self.assertTrue(all(decision['setup_checks'].values()))
             expensive = OpportunityService.decide('range-reversion-v1', frame, self.frame(60), self.frame(240), ticker, 12, round_trip_cost_pct=1.0)
             self.assertFalse(expensive['eligible'])
             self.assertFalse(expensive['checks']['cost_headroom'])
+            self.assertEqual(expensive['blocked_by'], ['cost_headroom'])
+            self.assertEqual(expensive['implementation_revision'], 'paper-audit-2026-11-16')
+
+    def test_range_reversion_rejects_insufficient_mean_recovery_without_relaxing_costs(self):
+        frame = self.frame(15)
+        frame.loc[118, 'close'] = 98.0
+        frame.loc[119, 'close'] = 99.0
+        middle = pd.Series([100.0] * 120)
+        lower = pd.Series([98.5] * 120)
+        rsi = pd.Series([35.0] * 119 + [38.0])
+        with patch('app.services.opportunity_service.IndicatorService.calculate_adx', return_value=pd.Series([15.0] * 120)), \
+                patch('app.services.opportunity_service.IndicatorService.calculate_bollinger_bands', return_value=(middle + 3, middle, lower)), \
+                patch('app.services.opportunity_service.IndicatorService.calculate_rsi', return_value=rsi):
+            decision = OpportunityService.decide('range-reversion-v1', frame, self.frame(60), self.frame(240),
+                                                 {'bid': 98.99, 'ask': 99.01, 'quote_volume': 50_000_000}, 12)
+        self.assertTrue(decision['checks']['setup'])
+        self.assertTrue(decision['checks']['trend_1h_4h'])
+        self.assertFalse(decision['eligible'])
+        self.assertEqual(decision['blocked_by'], ['cost_headroom'])
 
     def test_missing_history_and_forming_candle_are_not_tradeable(self):
         frame = self.frame(15)
