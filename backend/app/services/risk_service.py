@@ -117,8 +117,13 @@ class RiskService:
             max_capital_per_trade = min(cash * 0.95, total_equity * 0.20)
             quantity = min(quantity_by_risk, max_capital_per_trade / current_price)
 
-            if quantity * current_price < 10.0:
-                msg = f"Order capital allocation (${quantity * current_price:.2f}) below minimum requirements."
+            rule = SymbolRule.query.filter_by(symbol=signal.symbol).first()
+            quantity = round_qty(quantity, rule.qty_precision if rule else 6)
+            minimum_notional = float(rule.min_notional) if rule else 10.0
+            minimum_qty = float(rule.min_qty) if rule else 0.0001
+            if quantity < minimum_qty or quantity * current_price < minimum_notional:
+                msg = (f"Order capital allocation (${quantity * current_price:.2f}) or quantity "
+                       f"({quantity}) below symbol requirements (${minimum_notional:.2f}, {minimum_qty}).")
                 self.log_risk_event("MIN_CAPITAL_FAIL", signal.symbol, msg)
                 return False, msg, 0.0
 

@@ -366,10 +366,12 @@ def run_bot_loop(app: Flask, max_cycles: int | None = None):
                                         broadcast_event('fill_created', order_res.get('fill'))
                                     else:
                                         signal.status = 'REJECTED'
+                                        signal.reason = (signal.reason or '') + f" | Execution rejected: {order_res.get('error', 'unknown error')}"
                                         db.session.commit()
                                         LogService.log('ERROR', 'ExecutionEngine', f"Orden fallida: {order_res.get('error')}")
                                 else:
                                     signal.status = 'REJECTED'
+                                    signal.reason = (signal.reason or '') + f' | Risk rejected: {reason}'
                                     db.session.commit()
                                     LogService.log('WARNING', 'RiskEngine', f"Señal RECHAZADA por Motor de Riesgo: {reason}")
                                     broadcast_event('risk_alert', {'type': 'SIGNAL_REJECTED', 'symbol': symbol, 'reason': reason})
