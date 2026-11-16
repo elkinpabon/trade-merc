@@ -86,7 +86,7 @@ class OpportunityService:
             side, action = 'SELL', 'EXIT_LONG'
         elif decision['eligible']:
             # Cooldown limits new entries, never protective thesis exits.
-            last = Signal.query.filter_by(symbol=symbol).order_by(Signal.timestamp.desc()).first()
+            last = Signal.query.filter_by(symbol=symbol, status='EXECUTED').order_by(Signal.timestamp.desc()).first()
             if last and (utc_now() - last.timestamp).total_seconds() < config.cooldown_seconds:
                 return None
             side, action = 'BUY', 'ENTER_LONG'

@@ -160,6 +160,57 @@ class WorkerOperationsTestCase(unittest.TestCase):
         self.assertEqual(worker['status'], 'DEGRADED')
         self.assertIn('stale', worker['details'])
 
+    def test_rule_order_uses_fresh_executable_ask_not_old_last_price(self):
+        import json
+        import pandas as pd
+        from contextlib import ExitStack
+        from app.models import Signal
+        from app.services.model_service import ModelService
+
+        config = self.add_config()
+        config.strategy_key = 'relative-breakout-v1'
+        model = ModelService.for_config(config)
+        config.model_version_id = model.id
+        db.session.add(BotRun(id='quote-run', config_id=config.id, status='running'))
+        db.session.commit()
+        experiment = SimpleNamespace(id='quote-experiment', model_version_id=model.id,
+                                     config_snapshot_json='{}', planned_end_at=utc_now()+timedelta(days=30))
+        at = int(utc_now().replace(tzinfo=__import__('datetime').timezone.utc).timestamp()*1000)
+        old = {'last':100., 'bid':99.99, 'ask':100., 'timestamp':at}
+        fresh = {**old, 'bid':100.09, 'ask':100.10}
+        frame = pd.DataFrame([{'timestamp':index, 'datetime':pd.Timestamp('2026-11-16'),
+                               'close':100., 'rsi':55., 'adx':25., 'macd_histogram':1., 'vol_ratio':2.}
+                              for index in range(30)])
+        score = {'total_score':80., 'trend_score':20., 'momentum_score':20., 'volume_score':20.,
+                 'volatility_score':10., 'prediction_score':10., 'regime_score':10.,
+                 'ml_prediction':{'market_regime':'TRENDING_UP','lr_direction':1,'lr_r_squared':.7}}
+        decision = {'profile':config.strategy_key, 'eligible':True, 'checks':{'trend_1h_4h':True},
+                    'stop_loss_pct':1., 'take_profit_pct':3.}
+        patches = {
+            'ExperimentService.active_run': experiment, 'ExperimentService.config_unchanged': True,
+            'ExperimentService.finish_if_due': False, 'LogService.log': None, 'LogService.prune': None,
+            'broadcast_event': None, 'benchmark_context': {'status':'OK','bullish':True,'observed_at':at},
+            'MarketDataService.get_ohlcv_dataframe':frame, 'ScannerService.scan_tickers':[],
+            'RiskService.check_stop_loss_take_profit':None, 'IndicatorService.apply_indicators':frame,
+            'StrategyService.compute_composite_score':score, 'OpportunityService.decide':decision,
+            'EvaluationService.record':SimpleNamespace(signal_id=None,probability=None),
+            'EvaluationService.link_signal':None, 'EvaluationService.resolve_pending':0,
+            'RiskService.validate_signal_risk':(True,'APPROVED',.1),
+            'PortfolioService.update_valuation':None, 'PortfolioService.get_summary':{},
+            'ResearchMetricsService.update_paper_daily':None,
+        }
+        with ExitStack() as stack:
+            for name, value in patches.items(): stack.enter_context(patch('worker.bot_runner.'+name,return_value=value))
+            stack.enter_context(patch('worker.bot_runner.MarketDataService.fetch_all_tickers',
+                                      side_effect=[{'BTC/USDT':old},{'BTC/USDT':fresh}]))
+            place = stack.enter_context(patch('worker.bot_runner.PaperExecutionEngine.place_order',
+                                              return_value={'success':True,'order':{},'fill':{}}))
+            self.assertTrue(run_bot_loop(self.app,max_cycles=1))
+        self.assertEqual(place.call_args.kwargs['price'],100.10)
+        signal = Signal.query.one()
+        self.assertEqual(signal.status,'EXECUTED')
+        self.assertEqual(json.loads(signal.indicators_json)['execution_quote']['ask'],100.10)
+
 
 if __name__ == '__main__':
     unittest.main()
