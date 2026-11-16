@@ -33,6 +33,13 @@ class ExperimentService:
     def config_unchanged(cls, config, snapshot):
         current = json.loads(cls.config_snapshot(config))
         captured = json.loads(snapshot)
+        # Legacy MySQL DATETIME columns truncate fractional seconds on insert.
+        # These two metadata fields are not trading parameters; retain second-level
+        # equality while accepting their pre-commit representation in old snapshots.
+        for values in (current, captured):
+            for key in ('created_at', 'updated_at'):
+                if values.get(key):
+                    values[key] = datetime.fromisoformat(values[key]).replace(microsecond=0).isoformat()
         return all(current.get(key) == value for key, value in captured.items())
 
     @staticmethod

@@ -92,6 +92,13 @@ class PilotLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'authorization'):ExperimentService.start(config)
         self.assertEqual(StrategyRun.query.count(),1)
 
+    def test_snapshot_accepts_datetime_truncation_not_parameter_changes(self):
+        captured = json.loads(ExperimentService.config_snapshot(self.old_config))
+        captured['created_at'] = self.old_config.created_at.replace(microsecond=123456).isoformat()
+        self.assertTrue(ExperimentService.config_unchanged(self.old_config, json.dumps(captured)))
+        captured['cooldown_seconds'] = 3600
+        self.assertFalse(ExperimentService.config_unchanged(self.old_config, json.dumps(captured)))
+
     def test_new_ledger_is_separate_old_report_unchanged_and_retry_idempotent(self):
         run,config=self.start()
         self.assertNotEqual(run.config_id,self.old.config_id)
