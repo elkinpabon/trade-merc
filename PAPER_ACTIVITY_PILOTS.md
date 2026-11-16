@@ -49,3 +49,26 @@ Desplegar código compatible antes de cambiar perfiles, retirar bloques antiguos
 de Actions A entre ciclos y verificar SHA. B carga código en un hijo nuevo cada
 slot. Verificar experimento RUNNING, política congelada y primer ciclo SUCCESS.
 Los perfiles son reglas deterministas; no probabilidades calibradas ni ML entrenado.
+
+## Despliegue verificado, 2026-11-16 UTC
+
+- Código inicial main `7229307`, B `d7768f2`; corrección de precisión DATETIME
+  main `e05a119`, B `8863f53`. Suite local y VPS: 70 tests correctos con SQLite.
+- A: experimento `898542a3-9de0-4eda-9350-7b314d5f546e`, config 60002,
+  inicio 04:57:41 UTC, fin previsto 2026-12-16 04:57:41 UTC.
+- B: experimento `f7301274-2d6e-4d3c-a307-5e1b41078ba5`, config 2,
+  inicio 04:55:14 UTC, fin previsto 2026-12-16 04:55:14 UTC.
+- B primer ciclo SUCCESS 04:56:27–04:57:17 UTC, 20/20 mercados,
+  20 decisiones, cero órdenes y equity $100. El primer intento anterior se
+  bloqueó antes de operar por precisión de fechas; se corrigió sin cambiar
+  parámetros ni reescribir el snapshot congelado.
+- Bloques A antiguos 43800638373 y 43800263933 cancelados con cuenta plana
+  y sin ciclos activos antes de activar el perfil. Bloque nuevo 43807053157
+  y sucesor 43807109272 usan `e05a119`.
+- Un ciclo manual local A alcanzó el timeout de la herramienta antes de
+  terminar; se dejó como FAILED bajo lock tras confirmar que el proceso terminó.
+  No se convierte ese intento en SUCCESS ni se inventan operaciones.
+- A primer ciclo SUCCESS programado 05:01:05–05:02:23 UTC (slot 05:00),
+  20/20 mercados, cero órdenes y equity $100. Configuración congelada intacta.
+- Ambos predecessors siguen COMPLETED. C conserva su código y servicio;
+  Mercado conserva su protección. No se han utilizado fondos reales.
