@@ -27,6 +27,10 @@ B: 57.569 evaluaciones, 676 setups; 2.878 ciclos SUCCESS y tres no exitosos
 (datos/historia/tickers). 20 entradas ejecutadas y 7 rechazadas por mínimo de
 capital. B no tenía el tratamiento DUST ni el redondeo decimal de main; C sí
 los había heredado. Se verificó también contra los archivos desplegados.
+Los siete rechazos B fueron asignaciones de $9.62–$9.97 en símbolos con mínimo
+registrado de $5 (INJ, WLD, SPCXB y NEAR). No son evidencia de ganancias omitidas:
+solo demuestran la discrepancia entre la validación y las reglas del símbolo.
+B: diez stops (-2.8247), siete salidas por señal (-0.5883), tres TP (+1.7553).
 
 C: al corte ampliado, 18.160 evaluaciones y 291 setups técnicos. De esos setups,
 271 fallaron régimen, 262 costes, 98 liquidez y 17 volatilidad (los rechazos se
@@ -50,9 +54,11 @@ versión/experimento; no se cambia silenciosamente el experimento congelado.
    aumenta cantidad ni riesgo para alcanzar el mínimo. Sin regla se conservan $10.
 3. ADX comparaba el movimiento bajista con el alcista **ya filtrado**: barras
    exteriores con movimientos iguales producían una falsa dirección bajista.
-   Ambos DM se calculan desde movimientos originales. En los 291 setups de C,
-   nueve ADX cambiaron numéricamente, pero **ninguno cruzó el umbral 22** por este
-   arreglo. No se presenta este bug como causa demostrada de las cero entradas.
+   Ambos DM se calculan desde movimientos originales. Reconstruyendo los 291
+   setups de C con velas persistidas y tiempos UTC explícitos, ocho ADX cambiaron
+   numéricamente y ninguno cruzó 22. Se reprodujeron exactamente (tolerancia 1e-5)
+   274 ADX históricos; 17 no coincidieron exactamente, por lo que esto no sustituye
+   un replay validado. No se presenta este bug como causa de las cero entradas.
 4. Se conserva el motivo específico de rechazo de riesgo/ejecución en la señal,
    no solo en logs; así los rechazos futuros son auditables.
 5. B recibe el tratamiento DUST y redondeo decimal ya existentes en A/C.
@@ -73,3 +79,17 @@ una estrategia con rentabilidad demostrada. Mercado/PULSE no se modifica.
 Se detectaron credenciales históricas en configuración/workflows. No se copian
 en esta auditoría: requieren rotación y migración coordinada a secretos, sin
 romper los entornos existentes. No se rotan como parte de este arreglo funcional.
+
+## Publicación y pruebas
+
+- Código A: `a0772fe` en main; nuevo bloque Actions
+  `43790322795` confirmado con ese SHA tras retirar los bloques de código viejo.
+  Antes del relevo se comprobó que no había posiciones abiertas ni ciclo en marcha.
+- Código B: `c89dd72` en estrategia-vps, instalado con pull fast-forward en la VPS.
+- Código C: `4b985c9` en estrategia-vps-c, instalado con pull fast-forward.
+  Además guarda componentes individuales de régimen/setup, umbral de costes y
+  lista `blocked_by`, sin cambiar los umbrales de la estrategia.
+- Suites locales: A 39, B 39, C 41 pruebas correctas. En la VPS: B 39 y C 41,
+  con SQLite en memoria, sin ejecutar las pruebas contra las bases de operación.
+- No hizo falta reiniciar B/C: el supervisor inicia un proceso nuevo por slot.
+  Sus servicios y paneles permanecieron activos. No se tocó Mercado/PULSE.
