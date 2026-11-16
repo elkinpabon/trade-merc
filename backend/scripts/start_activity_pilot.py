@@ -48,6 +48,8 @@ def launch(profile, trial_key, expected_previous_run, *, acknowledge=False, sync
                            model_version_id=model.id)
         db.session.add(config)
         db.session.flush()
+        # Freeze persisted values, including MySQL DATETIME second precision.
+        db.session.refresh(config)
         now = utc_now()
         for old in BotRun.query.filter_by(status='running').all():
             old.status, old.stopped_at = 'stopped', now
