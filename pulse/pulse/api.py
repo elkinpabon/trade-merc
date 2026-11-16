@@ -133,6 +133,7 @@ def logout():
 
 @app.get('/api/overview')
 def overview(request: Request):
+    from .protection import entry_guard
     require_session(request)
     store = app.state.store
     timestamp = now_ms()
@@ -169,6 +170,7 @@ def overview(request: Request):
                             'started_at': a.started_at, 'trades': len(closed), 'wins': len(wins),
                             'profit_factor': profit/loss if loss else None,
                             'benchmark': float(last.benchmark) if last and last.benchmark is not None else None},
+                'entry_guard': entry_guard(s),
                 'positions': [serialize(p) for p in positions],
                 'curve': list(points.values()), 'policy': POLICY.__dict__,
                 'universe': store.get('universe', {}),

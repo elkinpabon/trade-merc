@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from .store import Account, Decision, Position, Snapshot, now_ms
 from .strategy import POLICY, decimal, floor_step, quote_valid, size_order, spread_pct
+from .protection import entry_guard, net_break_even_bid, REVISION as SAFETY_REVISION
 
 
 class PaperEngine:
@@ -28,8 +29,11 @@ class PaperEngine:
             if a.day != today:
                 a.day, a.day_equity = today, equity
             reason, status, order = '', 'WATCH', None
+            admission = entry_guard(s)
             if not decision['eligible']:
                 reason = ' · '.join(decision['reasons'])
+            elif admission['blocked']:
+                status, reason = 'REJECTED', admission['reason']
             elif not quote_valid(quote) or at - quote.get('at', 0) > 45_000 or quote.get('at', 0) > at:
                 status, reason = 'REJECTED', 'Cotización ausente u obsoleta'
             elif spread_pct(quote) > self.policy.max_spread_pct:
@@ -57,7 +61,8 @@ class PaperEngine:
                                high=order['fill'], entry_fee=order['fee'], opened_at=at, signal_key=key))
                 a.cash -= order['debit']
                 status, reason = 'ENTERED', 'Impulso + consolidación + ruptura confirmados'
-            details = {**decision, 'quote_at_execution': quote, 'rule_at_execution': rule}
+            details = {**decision, 'quote_at_execution': quote, 'rule_at_execution': rule,
+                       'entry_guard': admission, 'safety_revision': SAFETY_REVISION}
             s.add(Decision(signal_key=key, symbol=symbol, at=at, score=decision['score'],
                            status=status, reason=reason, details=json.dumps(details, allow_nan=False)))
             return status
@@ -78,7 +83,11 @@ class PaperEngine:
                 p.high = max(p.high, bid)
                 initial_risk = p.entry - p.initial_stop
                 if bid >= p.entry + initial_risk:
+                    break_even = net_break_even_bid(p.entry, p.entry_fee, p.quantity,
+                                                    self.policy.fee_pct, self.policy.slippage_pct)
                     p.stop = max(p.stop, p.high - initial_risk)
+                    if bid >= break_even:
+                        p.stop = max(p.stop, break_even)
                 reason = ('STOP' if bid <= p.stop else 'TARGET' if bid >= p.target else
                           'TIMEOUT' if at - p.opened_at >= self.policy.max_hold_minutes * 60_000 else None)
                 if not reason:

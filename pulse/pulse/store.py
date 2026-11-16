@@ -76,6 +76,21 @@ class State(Base):
     value = Column(Text().with_variant(MEDIUMTEXT(), 'mysql'), nullable=False)
 
 
+class ResearchCandle(Base):
+    __tablename__ = 'pulse_research_candles'
+    symbol = Column(String(32), primary_key=True)
+    open_at = Column(BigInteger, primary_key=True)
+    close_at = Column(BigInteger, nullable=False)
+    open = Column(Numeric(30, 12), nullable=False)
+    high = Column(Numeric(30, 12), nullable=False)
+    low = Column(Numeric(30, 12), nullable=False)
+    close = Column(Numeric(30, 12), nullable=False)
+    volume = Column(Numeric(30, 12), nullable=False)
+    quote_volume = Column(Numeric(30, 12), nullable=False)
+    taker_quote_volume = Column(Numeric(30, 12), nullable=False)
+    recorded_at = Column(BigInteger, nullable=False)
+
+
 def serialize(row):
     return {c.name: float(getattr(row, c.name)) if isinstance(getattr(row, c.name), Decimal)
             else getattr(row, c.name) for c in row.__table__.columns}
@@ -117,3 +132,26 @@ class Store:
         with self.Session() as s:
             row = s.get(State, key)
             return json.loads(row.value) if row else default
+
+    def record_closed_candles(self, symbol, bars, at=None):
+        """Append-only research data for the actually scanned universe, not a backfill."""
+        at = at or now_ms()
+        closed = {}
+        for b in bars:
+            if int(b[6]) >= at:
+                continue
+            o, h, l, c, v, qv, tqv = [Decimal(str(b[i])) for i in (1, 2, 3, 4, 5, 7, 10)]
+            if (not all(x.is_finite() for x in (o, h, l, c, v, qv, tqv))
+                    or min(o, h, l, c) <= 0 or min(v, qv, tqv) < 0
+                    or h < max(o, l, c) or l > min(o, c)
+                    or int(b[6]) - int(b[0]) != 299999):
+                raise ValueError('Invalid research candle')
+            closed[int(b[0])] = dict(symbol=symbol, open_at=int(b[0]), close_at=int(b[6]),
+                                      open=o, high=h, low=l, close=c, volume=v, quote_volume=qv,
+                                      taker_quote_volume=tqv, recorded_at=at)
+        with self.Session.begin() as s:
+            existing = set(s.scalars(select(ResearchCandle.open_at).where(
+                ResearchCandle.symbol == symbol, ResearchCandle.open_at.in_(closed))))
+            rows = [ResearchCandle(**row) for key, row in closed.items() if key not in existing]
+            s.add_all(rows)
+            return len(rows)

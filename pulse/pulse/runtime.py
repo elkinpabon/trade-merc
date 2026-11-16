@@ -20,12 +20,14 @@ class Runtime:
         self.threads = []
 
     def start(self):
+        from .protection import REVISION as SAFETY_REVISION
         self.store.initialize(POLICY)
         stored_version = self.store.get('strategy_version')
         if stored_version and stored_version != VERSION:
             raise RuntimeError('Strategy version mismatch: use a new experiment database')
         self.store.set('strategy_version', VERSION)
         self.store.set('boot', {'at': now_ms()})
+        self.store.set('safety_revision', {'at': now_ms(), 'revision': SAFETY_REVISION})
         for name, target in [('pulse-prices', self.prices), ('pulse-scanner', self.scanner)]:
             t = threading.Thread(target=target, name=name, daemon=True)
             self.threads.append(t)
@@ -66,7 +68,10 @@ class Runtime:
                     for future in as_completed(futures):
                         q = futures[future]
                         try:
-                            decision = evaluate(future.result(), q, now_ms())
+                            candles = future.result()
+                            evaluated_at = now_ms()
+                            decision = evaluate(candles, q, evaluated_at)
+                            self.store.record_closed_candles(q['symbol'], candles, evaluated_at)
                             results.append({'symbol': q['symbol'], 'base': q['base'], **decision,
                                             'volume_usdt': q['volume_usdt'], 'change_pct': q['change_pct']})
                         except Exception as exc:
